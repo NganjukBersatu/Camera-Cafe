@@ -39,8 +39,22 @@ def list_visits(
     total = db.scalar(select(func.count()).select_from(q.subquery())) or 0
     visits = db.scalars(q.order_by(Visit.visited_at.desc()).offset((page - 1) * size).limit(size)).all()
 
+    # Ambil nama customer untuk setiap visit
+    result = []
+    for v in visits:
+        customer = db.get(Customer, v.customer_id)
+        item = VisitResponse(
+            id=v.id,
+            customer_id=v.customer_id,
+            customer_name=customer.name if customer else None,
+            source=v.source,
+            recognition_event_id=v.recognition_event_id,
+            visited_at=v.visited_at,
+        )
+        result.append(item)
+
     return PaginatedVisits(
-        items=[VisitResponse.model_validate(v) for v in visits],
+        items=result,
         total=total,
         page=page,
         size=size,
@@ -60,4 +74,11 @@ def create_visit(body: VisitCreate, db: Session = Depends(get_db)):
     db.add(visit)
     db.commit()
     db.refresh(visit)
-    return VisitResponse.model_validate(visit)
+    return VisitResponse(
+        id=visit.id,
+        customer_id=visit.customer_id,
+        customer_name=customer.name,
+        source=visit.source,
+        recognition_event_id=visit.recognition_event_id,
+        visited_at=visit.visited_at,
+    )

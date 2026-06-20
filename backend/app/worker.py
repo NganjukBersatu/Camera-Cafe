@@ -5,6 +5,7 @@ celery_app = Celery(
     "camera_cafe",
     broker=settings.redis_url,
     backend=settings.redis_url,
+    include=["app.tasks.ai_tasks"],
 )
 
 celery_app.conf.update(
@@ -13,4 +14,5 @@ celery_app.conf.update(
     accept_content=["json"],
     timezone="Asia/Jakarta",
     enable_utc=True,
+    task_track_started=True,
 )
