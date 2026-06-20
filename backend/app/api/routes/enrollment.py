@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.customer import Customer, CustomerFace
 from app.models.visit import Visit
+from app.models.recognition import RecognitionEvent
 from app.vector.qdrant import get_client, ensure_collection, upsert_face, search_face
 from app.services.ai_pipeline import AIPipeline
 from datetime import datetime, timezone
@@ -85,6 +86,16 @@ async def recognize_face(
     matches = search_face(qdrant, embedding, threshold=0.6)
 
     if not matches:
+        # Catat recognition event yang tidak match
+        rec_event = RecognitionEvent(
+            id=str(uuid.uuid4()),
+            camera_id="webcam-kasir",
+            customer_id=None,
+            similarity=0.0,
+            matched=False,
+        )
+        db.add(rec_event)
+        db.commit()
         return {"recognized": False, "message": "Wajah tidak dikenali"}
 
     customer_id = matches[0].payload["customer_id"]
@@ -100,6 +111,17 @@ async def recognize_face(
         source="camera",
     )
     db.add(visit)
+    db.commit()
+
+    # Catat recognition event yang berhasil
+    rec_event = RecognitionEvent(
+        id=str(uuid.uuid4()),
+        camera_id="webcam-kasir",
+        customer_id=customer_id,
+        similarity=matches[0].score,
+        matched=True,
+    )
+    db.add(rec_event)
     db.commit()
 
     # Broadcast ke dashboard via WebSocket

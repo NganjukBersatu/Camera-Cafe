@@ -98,7 +98,7 @@
 							</td>
 							<td class="px-4 py-3">
 								<a href="/customers/{visit.customer_id}" class="font-medium text-primary-400 hover:underline">
-									{visit.customer_name}
+    								{visit.customer_name ?? 'Pelanggan'}
 								</a>
 							</td>
 							<td class="px-4 py-3 text-surface-400">

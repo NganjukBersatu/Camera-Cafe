@@ -13,6 +13,7 @@ class VisitResponse(BaseModel):
 
     id: str
     customer_id: str
+    customer_name: str | None = None
     source: str
     recognition_event_id: str | None
     visited_at: datetime
