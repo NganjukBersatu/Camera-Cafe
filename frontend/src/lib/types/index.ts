@@ -71,6 +71,8 @@ export interface WsCustomerDetectedPayload {
 	customer_name: string;
 	similarity: number;
 	preferences: string | null;
+	notes: string | null;
+	total_visits: number;
 	last_visit: string | null;
 	detected_at: string;
 }
