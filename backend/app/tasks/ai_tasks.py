@@ -41,64 +41,72 @@ def process_frame_task(frame_b64: str, camera_id: str = "webcam-kasir"):
         # Qdrant
         qdrant = get_client()
         ensure_collection(qdrant)
-
         embedding = faces[0]["embedding"]
         matches = search_face(qdrant, embedding, threshold=0.6)
 
         # Tidak dikenali
         if not matches:
-            db.add(
-                RecognitionEvent(
-                    id=str(uuid.uuid4()),
-                    camera_id=camera_id,
-                    customer_id=None,
-                    similarity=0.0,
-                    matched=False,
-                )
-            )
-
+            db.add(RecognitionEvent(
+                id=str(uuid.uuid4()),
+                camera_id=camera_id,
+                customer_id=None,
+                similarity=0.0,
+                matched=False,
+            ))
             db.commit()
-
             return {"success": False, "message": "Wajah tidak dikenali"}
 
         # Ambil customer
         customer_id = matches[0].payload["customer_id"]
-
         customer = db.get(Customer, customer_id)
 
         if not customer:
             return {"success": False, "message": "Customer tidak ditemukan"}
 
-        # Statistik customer
+        # Cek cooldown DULU sebelum simpan apapun
+        r = redis.from_url(settings.redis_url)
+        cooldown_key = f"cooldown:{customer_id}"
+        already_notified = r.get(cooldown_key)
+
+        if already_notified:
+            print(f"Cooldown aktif untuk {customer.name} — skip")
+            return {
+                "success": True,
+                "customer_id": customer_id,
+                "customer_name": customer.name,
+                "message": "cooldown aktif",
+            }
+
+        # Set cooldown 5 menit
+        r.setex(cooldown_key, 60, "1")
+
+        # Ambil statistik
         total_visits = db.query(Visit).filter(Visit.customer_id == customer_id).count()
-
-        last_visit_obj = db.query(Visit).filter(Visit.customer_id == customer_id).order_by(Visit.created_at.desc()).first()
-
-        last_visit = last_visit_obj.created_at.isoformat() if last_visit_obj else None
+        last_visit_obj = (
+            db.query(Visit)
+            .filter(Visit.customer_id == customer_id)
+            .order_by(Visit.visited_at.desc())
+            .first()
+        )
+        last_visit = last_visit_obj.visited_at.isoformat() if last_visit_obj else None
 
         # Simpan visit baru
-        db.add(
-            Visit(
-                id=str(uuid.uuid4()),
-                customer_id=customer_id,
-                source="camera",
-            )
-        )
+        db.add(Visit(
+            id=str(uuid.uuid4()),
+            customer_id=customer_id,
+            source="camera",
+        ))
 
         # Simpan recognition event
-        db.add(
-            RecognitionEvent(
-                id=str(uuid.uuid4()),
-                camera_id=camera_id,
-                customer_id=customer_id,
-                similarity=matches[0].score,
-                matched=True,
-            )
-        )
-
+        db.add(RecognitionEvent(
+            id=str(uuid.uuid4()),
+            camera_id=camera_id,
+            customer_id=customer_id,
+            similarity=matches[0].score,
+            matched=True,
+        ))
         db.commit()
 
-        # Response
         result = {
             "success": True,
             "customer_id": customer_id,
@@ -106,13 +114,13 @@ def process_frame_task(frame_b64: str, camera_id: str = "webcam-kasir"):
             "similarity": matches[0].score,
             "preferences": customer.preferences,
             "notes": customer.notes,
-            "total_visits": total_visits,
+            "total_visits": total_visits + 1,
             "last_visit": last_visit,
             "camera_id": camera_id,
             "detected_at": datetime.now(timezone.utc).isoformat(),
         }
 
-        # Publish Redis
+        # Publish ke Redis
         payload = {
             "event_type": "customer_detected",
             "camera_id": camera_id,
@@ -121,14 +129,12 @@ def process_frame_task(frame_b64: str, camera_id: str = "webcam-kasir"):
             "similarity": matches[0].score,
             "preferences": customer.preferences,
             "notes": customer.notes,
-            "total_visits": total_visits,
+            "total_visits": total_visits + 1,
             "last_visit": last_visit,
             "detected_at": datetime.now(timezone.utc).isoformat(),
         }
 
-        print("PUBLISH REDIS:", payload)
-
-        r = redis.from_url(settings.redis_url)
+        print(f"Broadcast notifikasi: {customer.name}")
         r.publish("recognition_events", json.dumps(payload))
 
         return result

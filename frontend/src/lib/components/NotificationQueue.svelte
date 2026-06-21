@@ -3,14 +3,22 @@
 	import type { Notification } from '$lib/types';
 
 	function timeAgo(ts: number): string {
-		const secs = Math.floor((Date.now() - ts) / 1000);
-		if (secs < 60) return `${secs}d lalu`;
-		return `${Math.floor(secs / 60)}m lalu`;
+		const diff = Math.floor((Date.now() - ts) / 1000);
+		if (diff < 60) return 'Baru saja';
+		const minutes = Math.floor(diff / 60);
+		if (minutes < 60) {
+			return `${minutes} menit lalu`;
+		}
+		const hours = Math.floor(minutes / 60);
+		if (hours < 24) {
+			return `${hours} jam lalu`;
+		}
+		return `${Math.floor(hours / 24)} hari lalu`;
 	}
 
 	function confidence(similarity: number): string {
-		if (similarity >= 0.85) return 'text-success-400';
-		if (similarity >= 0.7) return 'text-warning-400';
+		if (similarity >= 0.8) return 'text-success-400';
+		if (similarity >= 0.6) return 'text-warning-400';
 		return 'text-error-400';
 	}
 </script>
@@ -30,7 +38,7 @@
 					{/if}
 					<div class="mt-1.5 flex items-center gap-2">
 						<span class="text-xs {confidence(notif.payload.similarity)}">
-							{Math.round(notif.payload.similarity * 100)}% match
+							{Math.round(notif.payload.similarity * 100)}% 
 						</span>
 						<span class="text-xs text-surface-500">{timeAgo(notif.received_at)}</span>
 					</div>
@@ -47,6 +55,7 @@
 			<div class="mt-3 flex gap-2">
 				<a
 					href="/customers/{notif.payload.customer_id}"
+					onclick={() => notifications.dismiss(notif.id)}
 					class="flex-1 rounded bg-primary-500/20 py-1.5 text-center text-xs font-medium text-primary-300 hover:bg-primary-500/30"
 				>
 					Lihat Profil
