@@ -55,16 +55,18 @@ export const api = {
     },
 
     visits: {
-        list: (params?: { customer_id?: string; date_from?: string; date_to?: string; page?: number }): Promise<PaginatedResponse<Visit>> => {
-            const query = new URLSearchParams();
-            if (params?.customer_id) query.set('customer_id', params.customer_id);
-            if (params?.date_from) query.set('date_from', params.date_from);
-            if (params?.date_to) query.set('date_to', params.date_to);
-            if (params?.page) query.set('page', String(params.page));
-            return request(`/visits?${query}`);
-        },
-        create: (body: { customer_id: string; source: string }): Promise<Visit> =>
-            request('/visits', { method: 'POST', body: JSON.stringify(body) })
+    list: (params?: { customer_id?: string; date_from?: string; date_to?: string; page?: number }): Promise<PaginatedResponse<Visit>> => {
+        const query = new URLSearchParams();
+        if (params?.customer_id) query.set('customer_id', params.customer_id);
+        if (params?.date_from) query.set('date_from', params.date_from);
+        if (params?.date_to) query.set('date_to', params.date_to);
+        if (params?.page) query.set('page', String(params.page));
+        return request(`/visits?${query}`);
+    },
+    create: (body: { customer_id: string; source: string }): Promise<Visit> =>
+        request('/visits', { method: 'POST', body: JSON.stringify(body) }),
+    updateOrder: (visitId: string, orderNote: string): Promise<{ status: string }> =>
+        request(`/visits/${visitId}/order?order_note=${encodeURIComponent(orderNote)}`, { method: 'PATCH' })  // ← tambah ini
     },
 
     cameras: {

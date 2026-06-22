@@ -33,6 +33,7 @@ export interface Visit {
 	source: VisitSource;
 	recognition_event_id: string | null;
 	visited_at: string;
+	order_note: string | null;
 }
 
 export interface RecognitionEvent {
