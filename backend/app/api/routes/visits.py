@@ -82,3 +82,19 @@ def create_visit(body: VisitCreate, db: Session = Depends(get_db)):
         recognition_event_id=visit.recognition_event_id,
         visited_at=visit.visited_at,
     )
+
+@router.patch("/{visit_id}/order")
+def update_order_note(visit_id: str, order_note: str = Query(...), db: Session = Depends(get_db)):
+    visit = db.get(Visit, visit_id)
+    if not visit:
+        raise HTTPException(status_code=404, detail="Visit tidak ditemukan")
+    
+    visit.order_note = order_note
+    
+    # Sync preferences customer
+    customer = db.get(Customer, visit.customer_id)
+    if customer:
+        customer.preferences = order_note
+    
+    db.commit()
+    return {"status": "ok", "visit_id": visit_id, "order_note": order_note}

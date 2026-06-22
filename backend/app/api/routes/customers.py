@@ -30,9 +30,9 @@ def list_customers(
     if search:
         q = q.where(Customer.name.ilike(f"%{search}%"))
     if status == "active":
-        q = q.where(Customer.is_active_(True))
+        q = q.where(Customer.is_active.is_(True))
     elif status == "inactive":
-        q = q.where(Customer.is_active_(False))
+        q = q.where(Customer.is_active.is_(False))
 
     total = db.scalar(select(func.count()).select_from(q.subquery())) or 0
     customers = db.scalars(q.offset((page - 1) * size).limit(size)).all()

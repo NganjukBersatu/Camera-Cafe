@@ -17,6 +17,7 @@ class VisitResponse(BaseModel):
     source: str
     recognition_event_id: str | None
     visited_at: datetime
+    order_note: str | None = None  # ← tambah ini
 
 
 class PaginatedVisits(BaseModel):

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { api } from '$lib/api/client';
 	import type { Visit } from '$lib/types';
+	import { onMount } from 'svelte';
 
 	let visits = $state<Visit[]>([]);
 	let total = $state(0);
@@ -26,7 +27,7 @@
 		}
 	}
 
-	$effect(() => {
+	onMount(() => {
 		void load();
 	});
 </script>

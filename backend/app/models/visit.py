@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import String, DateTime, ForeignKey
+from sqlalchemy import String, DateTime, Text, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
@@ -17,6 +17,7 @@ class Visit(Base):
     source: Mapped[str] = mapped_column(String(50), nullable=False, default="manual")
     recognition_event_id: Mapped[str | None] = mapped_column(String, nullable=True)
     visited_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    order_note: Mapped[str | None] = mapped_column(Text, nullable=True)  # ← tambah ini
 
     customer: Mapped["Customer"] = relationship(back_populates="visits")
 

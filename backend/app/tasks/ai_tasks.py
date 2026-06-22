@@ -90,13 +90,6 @@ def process_frame_task(frame_b64: str, camera_id: str = "webcam-kasir"):
         )
         last_visit = last_visit_obj.visited_at.isoformat() if last_visit_obj else None
 
-        # Simpan visit baru
-        db.add(Visit(
-            id=str(uuid.uuid4()),
-            customer_id=customer_id,
-            source="camera",
-        ))
-
         # Simpan recognition event
         db.add(RecognitionEvent(
             id=str(uuid.uuid4()),

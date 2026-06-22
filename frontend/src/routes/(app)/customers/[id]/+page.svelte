@@ -11,6 +11,12 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 
+	// Modal state
+	let showOrderModal = $state(false);
+	let selectedVisit = $state<Visit | null>(null);
+	let orderInput = $state('');
+	let savingOrder = $state(false);
+
 	async function load(): Promise<void> {
 		loading = true;
 		error = null;
@@ -43,6 +49,40 @@
 			alert(e instanceof Error ? e.message : 'Gagal menghapus data wajah');
 		}
 	}
+
+	// Ambil pesanan terakhir dari riwayat kunjungan
+	const lastOrder = $derived(customer?.preferences ?? null);
+
+	function openOrderModal(visit: Visit): void {
+		selectedVisit = visit;
+		orderInput = visit.order_note ?? '';
+		showOrderModal = true;
+	}
+
+	function openNewOrderModal(): void {
+		// Pakai kunjungan terbaru
+		const latest = visits[0] ?? null;
+		selectedVisit = latest;
+		orderInput = lastOrder ?? '';
+		showOrderModal = true;
+	}
+
+	async function saveOrder(): Promise<void> {
+		if (!selectedVisit || !orderInput.trim()) return;
+		savingOrder = true;
+		try {
+			await api.visits.updateOrder(selectedVisit.id, orderInput.trim());
+			visits = visits.map((v) =>
+				v.id === selectedVisit!.id ? { ...v, order_note: orderInput.trim() } : v
+			);
+			if (customer) customer = { ...customer, preferences: orderInput.trim() };
+			showOrderModal = false;
+		} catch (e) {
+			alert('Gagal menyimpan pesanan');
+		} finally {
+			savingOrder = false;
+		}
+	}
 </script>
 
 <svelte:head><title>{customer?.name ?? 'Pelanggan'} — Camera Cafe CRM</title></svelte:head>
@@ -68,9 +108,16 @@
 					{customer.status === 'active' ? 'Aktif' : 'Nonaktif'}
 				</span>
 			</div>
-			<a href="/enrollment?customer_id={customer.id}" class="rounded-md bg-primary-500 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-400">
-				+ Tambah Wajah
-			</a>
+			<div class="flex gap-2">
+				<button
+					onclick={openNewOrderModal}
+					class="rounded-md bg-success-600 px-4 py-2 text-sm font-semibold text-white hover:bg-success-500">
+					+ Catat Pesanan
+				</button>
+				<a href="/enrollment?customer_id={customer.id}" class="rounded-md bg-primary-500 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-400">
+					+ Tambah Wajah
+				</a>
+			</div>
 		</div>
 
 		<div class="grid gap-4 lg:grid-cols-2">
@@ -107,12 +154,7 @@
 						{#each faces as face (face.id)}
 							<div class="flex items-center justify-between rounded-md bg-surface-800 px-3 py-2 text-sm">
 								<span class="text-surface-300">{new Date(face.created_at).toLocaleDateString('id-ID')}</span>
-								<button
-									onclick={() => deleteFace(face.id)}
-									class="text-error-400 hover:text-error-300"
-								>
-									Hapus
-								</button>
+								<button onclick={() => deleteFace(face.id)} class="text-error-400 hover:text-error-300">Hapus</button>
 							</div>
 						{/each}
 					</div>
@@ -131,7 +173,9 @@
 						<thead class="bg-surface-800 text-left">
 							<tr>
 								<th class="px-4 py-2 font-medium text-surface-400">Waktu</th>
+								<th class="px-4 py-2 font-medium text-surface-400">Pesanan</th>
 								<th class="px-4 py-2 font-medium text-surface-400">Sumber</th>
+								<th class="px-4 py-2 font-medium text-surface-400"></th>
 							</tr>
 						</thead>
 						<tbody class="divide-y divide-surface-700">
@@ -140,8 +184,18 @@
 									<td class="px-4 py-2 text-surface-200">
 										{new Date(visit.visited_at).toLocaleString('id-ID')}
 									</td>
+									<td class="px-4 py-2 text-surface-100">
+										{visit.order_note ?? '—'}
+									</td>
 									<td class="px-4 py-2 text-surface-400">
 										{visit.source === 'auto_recognition' ? '🎥 Auto' : '✋ Manual'}
+									</td>
+									<td class="px-4 py-2">
+										<button
+											onclick={() => openOrderModal(visit)}
+											class="text-xs text-primary-400 hover:text-primary-300">
+											{visit.order_note ? 'Edit' : 'Catat'}
+										</button>
 									</td>
 								</tr>
 							{/each}
@@ -149,6 +203,45 @@
 					</table>
 				</div>
 			{/if}
+		</div>
+	</div>
+{/if}
+
+<!-- Modal Catat Pesanan -->
+{#if showOrderModal}
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+		<div class="w-full max-w-sm rounded-xl border border-surface-700 bg-surface-900 p-6 shadow-xl">
+			<h2 class="mb-4 text-lg font-semibold text-surface-50">Catat Pesanan — {customer?.name}</h2>
+
+			{#if lastOrder}
+				<button
+					onclick={() => { orderInput = lastOrder; }}
+					class="mb-4 w-full rounded-lg bg-success-600/20 border border-success-600/40 px-4 py-3 text-left text-sm font-medium text-success-300 hover:bg-success-600/30">
+					✓ Pesan seperti biasanya: {lastOrder}
+				</button>
+			{/if}
+
+			<label class="mb-1 block text-xs text-surface-400">Atau ketik pesanan:</label>
+			<input
+				type="text"
+				bind:value={orderInput}
+				placeholder="contoh: Kopi Susu, Es Teh..."
+				class="w-full rounded-md border border-surface-600 bg-surface-800 px-3 py-2 text-sm text-surface-100 placeholder-surface-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+			/>
+
+			<div class="mt-4 flex gap-2">
+				<button
+					onclick={() => { showOrderModal = false; }}
+					class="flex-1 rounded-md border border-surface-600 px-4 py-2 text-sm text-surface-300 hover:bg-surface-800">
+					Batal
+				</button>
+				<button
+					onclick={saveOrder}
+					disabled={savingOrder || !orderInput.trim()}
+					class="flex-1 rounded-md bg-primary-500 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-400 disabled:opacity-50">
+					{savingOrder ? 'Menyimpan...' : 'Simpan'}
+				</button>
+			</div>
 		</div>
 	</div>
 {/if}

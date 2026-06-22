@@ -9,14 +9,19 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 
+	let timer: ReturnType<typeof setTimeout>;
+	let initialized = false;
+
 	async function load(): Promise<void> {
 		loading = true;
 		error = null;
+
 		try {
 			const res = await api.customers.list({
 				search: search || undefined,
 				status: statusFilter !== 'all' ? statusFilter : undefined
 			});
+
 			customers = res.items;
 			total = res.total;
 		} catch (e) {
@@ -27,7 +32,22 @@
 	}
 
 	$effect(() => {
-		void load();
+		search;
+		statusFilter;
+
+		if (!initialized) {
+			initialized = true;
+			void load();
+			return;
+		}
+
+		clearTimeout(timer);
+
+		timer = setTimeout(() => {
+			void load();
+		}, 300);
+
+		return () => clearTimeout(timer);
 	});
 </script>
 
