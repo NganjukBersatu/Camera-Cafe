@@ -51,7 +51,6 @@ class CustomerResponse(BaseModel):
             updated_at=obj.updated_at,
         )
 
-
 class PaginatedCustomers(BaseModel):
     items: list[CustomerResponse]
     total: int

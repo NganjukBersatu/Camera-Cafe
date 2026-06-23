@@ -4,7 +4,8 @@
 	import { wsConnected } from '$lib/stores/systemHealth';
 	import { createWsClient } from '$lib/ws/client';
 	import { api } from '$lib/api/client';
-	import type { WsCustomerDetectedPayload } from '$lib/types';
+
+	const STREAM_URL = 'http://localhost:8000/cameras/stream/live';
 
 	let wsClient: { destroy: () => void } | null = null;
 
@@ -32,7 +33,6 @@
 		if (!modalNotif || !orderInput.trim()) return;
 		saving = true;
 		try {
-			// Buat visit baru dulu, lalu catat pesanannya
 			const visit = await api.visits.create({
 				customer_id: modalNotif.payload.customer_id,
 				source: 'manual'
@@ -76,7 +76,7 @@
 	<title>Dashboard — Camera Cafe CRM</title>
 </svelte:head>
 
-<div class="flex h-full flex-col gap-6">
+<div class="flex h-full flex-col gap-4">
 	<div class="flex items-center justify-between">
 		<div>
 			<h1 class="text-2xl font-bold text-surface-50">Dashboard Kasir</h1>
@@ -88,61 +88,96 @@
 		</div>
 	</div>
 
-	{#if $activeNotifications.length === 0}
-		<div class="flex flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-surface-700 text-center">
-			<p class="text-4xl">📡</p>
-			<p class="font-semibold text-surface-300">Menunggu pelanggan</p>
-			<p class="text-sm text-surface-500">Notifikasi muncul otomatis saat kamera mendeteksi pelanggan</p>
+	<!-- Layout 2 kolom -->
+	<div class="grid grid-cols-[1fr_380px] gap-4 flex-1">
+
+		<!-- Kolom kiri — Video -->
+		<div class="rounded-xl border border-surface-700 bg-surface-900 overflow-hidden flex flex-col">
+			<div class="flex items-center justify-between px-4 py-2 border-b border-surface-700">
+				<p class="text-sm font-semibold text-surface-300">Kamera Kasir</p>
+				{#if $activeNotifications.length > 0}
+					<span class="text-xs font-medium text-warning-400">
+						{$activeNotifications.length} pelanggan terdeteksi
+					</span>
+				{:else}
+					<span class="text-xs text-surface-500">Menunggu pelanggan...</span>
+				{/if}
+			</div>
+			<div class="relative flex-1">
+				<img
+					src={STREAM_URL}
+					alt="Live stream kamera"
+					class="w-full h-full object-contain bg-black"
+				/>
+				<!-- Overlay nama -->
+				{#if $activeNotifications.length > 0}
+					<div class="absolute bottom-0 left-0 right-0 flex flex-wrap gap-2 p-3">
+						{#each $activeNotifications as notif (notif.id)}
+							<span class="rounded-full bg-black/70 px-3 py-1 text-sm font-semibold {confidence(notif.payload.similarity)}">
+								{notif.payload.customer_name} — {Math.round(notif.payload.similarity * 100)}%
+							</span>
+						{/each}
+					</div>
+				{/if}
+			</div>
 		</div>
 
-	{:else}
-		<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-			{#each $activeNotifications as notif (notif.id)}
-				<div class="rounded-xl border border-surface-700 bg-surface-900 p-5 shadow-lg">
-					<div class="flex items-start justify-between">
-						<div>
-							<p class="font-bold text-lg text-surface-50">{notif.payload.customer_name}</p>
-							<p class="mt-1 text-xs text-surface-500">{timeAgo(notif.received_at)}</p>
-						</div>
-						<span class="text-md font-bold {confidence(notif.payload.similarity)}">
-							{Math.round(notif.payload.similarity * 100)}%
-						</span>
-					</div>
-
-					{#if notif.payload.preferences}
-						<div class="mt-2 rounded-lg bg-surface-800 p-3">
-							<p class="text-xs uppercase tracking-wider text-surface-500">Preferensi</p>
-							<p class="mt-2 text-md text-surface-100">{notif.payload.preferences}</p>
-						</div>
-					{/if}
-
-					{#if notif.payload.last_visit}
-						<p class="mt-2 text-xs text-surface-400">
-							Kunjungan terakhir: {formatDate(notif.payload.last_visit)}
-						</p>
-					{/if}
-
-					<div class="mt-3 flex gap-2">
-						<button
-							onclick={() => openOrderModal(notif)}
-							class="flex-1 rounded-md bg-success-600 py-2 text-center text-sm font-semibold text-white hover:bg-success-500">
-							Catat Pesanan
-						</button>
-						<a
-							href="/customers/{notif.payload.customer_id}"
-							class="flex-1 rounded-md bg-primary-500 py-2 text-center text-sm font-semibold text-white hover:bg-primary-400">
-							Lihat Profil
-						</a>
-						<button
-							onclick={() => notifications.dismiss(notif.id)}
-							class="rounded-md bg-surface-700 px-3 py-2 text-sm font-semibold text-surface-300 hover:bg-surface-600">
-							✕
-						</button>
-					</div>
+		<!-- Kolom kanan — Notifikasi -->
+		<div class="flex flex-col gap-3 overflow-y-auto">
+			{#if $activeNotifications.length === 0}
+				<div class="flex flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-surface-700 text-center p-6 h-full">
+					<p class="text-4xl">📡</p>
+					<p class="font-semibold text-surface-300">Menunggu pelanggan</p>
+					<p class="text-sm text-surface-500">Notifikasi muncul otomatis saat kamera mendeteksi pelanggan</p>
 				</div>
-			{/each}
+			{:else}
+				{#each $activeNotifications as notif (notif.id)}
+					<div class="rounded-xl border border-surface-700 bg-surface-900 p-4 shadow-lg">
+						<div class="flex items-start justify-between">
+							<div>
+								<p class="font-bold text-lg text-surface-50">{notif.payload.customer_name}</p>
+								<p class="mt-1 text-xs text-surface-500">{timeAgo(notif.received_at)}</p>
+							</div>
+							<span class="text-md font-bold {confidence(notif.payload.similarity)}">
+								{Math.round(notif.payload.similarity * 100)}%
+							</span>
+						</div>
+
+						{#if notif.payload.preferences}
+							<div class="mt-2 rounded-lg bg-surface-800 p-3">
+								<p class="text-xs uppercase tracking-wider text-surface-500">Preferensi</p>
+								<p class="mt-2 text-sm text-surface-100">{notif.payload.preferences}</p>
+							</div>
+						{/if}
+
+						{#if notif.payload.last_visit}
+							<p class="mt-2 text-xs text-surface-400">
+								Kunjungan terakhir: {formatDate(notif.payload.last_visit)}
+							</p>
+						{/if}
+
+						<div class="mt-3 flex gap-2">
+							<button
+								onclick={() => openOrderModal(notif)}
+								class="flex-1 rounded-md bg-success-600 py-2 text-center text-sm font-semibold text-white hover:bg-success-500">
+								Catat Pesanan
+							</button>
+							<a
+								href="/customers/{notif.payload.customer_id}"
+								class="flex-1 rounded-md bg-primary-500 py-2 text-center text-sm font-semibold text-white hover:bg-primary-400">
+								Lihat Profil
+							</a>
+							<button
+								onclick={() => notifications.dismiss(notif.id)}
+								class="rounded-md bg-surface-700 px-3 py-2 text-sm font-semibold text-surface-300 hover:bg-surface-600">
+								✕
+							</button>
+						</div>
+					</div>
+				{/each}
+			{/if}
 		</div>
-	{/if}
+	</div>
 </div>
 
 <!-- Modal Catat Pesanan -->
@@ -161,8 +196,9 @@
 				</button>
 			{/if}
 
-			<label class="mb-1 block text-xs text-surface-400">Atau ketik pesanan:</label>
+			<label for="orderInput" class="mb-1 block text-xs text-surface-400">Atau ketik pesanan:</label>
 			<input
+				id="orderInput"
 				type="text"
 				bind:value={orderInput}
 				placeholder="contoh: Kopi Susu, Es Teh..."

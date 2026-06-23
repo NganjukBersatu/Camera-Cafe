@@ -5,7 +5,13 @@ from websockets import route
 from app.database import get_db
 from app.models.camera import CameraSource
 from app.schemas.camera import (CameraCreate, CameraUpdate, CameraResponse, PaginatedCameras)
+from fastapi.responses import StreamingResponse
+import redis
+import base64
+import time
+from app.config import settings
 import uuid
+
 
 router = APIRouter(prefix="/cameras", tags=["cameras"])
 
@@ -69,3 +75,22 @@ def delete_camera(camera_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Camera tidak ditemukan")
     db.delete(camera)
     db.commit()
+
+@router.get("/stream/live")
+def stream_camera():
+    def generate():
+        r = redis.from_url(settings.redis_url)
+        while True:
+            frame_b64 = r.get("latest_frame")
+            if frame_b64:
+                frame_bytes = base64.b64decode(frame_b64)
+                yield (
+                    b"--frame\r\n"
+                    b"Content-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n"
+                )
+            time.sleep(0.1)
+
+    return StreamingResponse(
+        generate(),
+        media_type="multipart/x-mixed-replace; boundary=frame"
+    )
