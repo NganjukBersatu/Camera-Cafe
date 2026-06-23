@@ -11,11 +11,18 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 
-	// Modal state
+	// Modal order state
 	let showOrderModal = $state(false);
 	let selectedVisit = $state<Visit | null>(null);
 	let orderInput = $state('');
 	let savingOrder = $state(false);
+
+	// Modal tambah wajah state
+	let showFaceModal = $state(false);
+	let faceFile = $state<File | null>(null);
+	let facePreview = $state<string | null>(null);
+	let savingFace = $state(false);
+	let faceError = $state<string | null>(null);
 
 	async function load(): Promise<void> {
 		loading = true;
@@ -50,7 +57,6 @@
 		}
 	}
 
-	// Ambil pesanan terakhir dari riwayat kunjungan
 	const lastOrder = $derived(customer?.preferences ?? null);
 
 	function openOrderModal(visit: Visit): void {
@@ -60,7 +66,6 @@
 	}
 
 	function openNewOrderModal(): void {
-		// Pakai kunjungan terbaru
 		const latest = visits[0] ?? null;
 		selectedVisit = latest;
 		orderInput = lastOrder ?? '';
@@ -81,6 +86,31 @@
 			alert('Gagal menyimpan pesanan');
 		} finally {
 			savingOrder = false;
+		}
+	}
+
+	function handleFaceFile(e: Event): void {
+		const input = e.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+		faceFile = file;
+		facePreview = URL.createObjectURL(file);
+	}
+
+	async function saveFace(): Promise<void> {
+		if (!faceFile) return;
+		savingFace = true;
+		faceError = null;
+		try {
+			const newFace = await api.enrollment.enroll(customerId, faceFile);
+			await load(); // reload faces
+			showFaceModal = false;
+			faceFile = null;
+			facePreview = null;
+		} catch (e) {
+			faceError = e instanceof Error ? e.message : 'Gagal menyimpan wajah';
+		} finally {
+			savingFace = false;
 		}
 	}
 </script>
@@ -114,9 +144,11 @@
 					class="rounded-md bg-success-600 px-4 py-2 text-sm font-semibold text-white hover:bg-success-500">
 					+ Catat Pesanan
 				</button>
-				<a href="/enrollment?customer_id={customer.id}" class="rounded-md bg-primary-500 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-400">
+				<button
+					onclick={() => { showFaceModal = true; faceFile = null; facePreview = null; faceError = null; }}
+					class="rounded-md bg-primary-500 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-400">
 					+ Tambah Wajah
-				</a>
+				</button>
 			</div>
 		</div>
 
@@ -150,7 +182,7 @@
 				{#if faces.length === 0}
 					<p class="text-sm text-surface-500">Belum ada data wajah tersimpan.</p>
 				{:else}
-					<div class="flex flex-col gap-2">
+					<div class="flex flex-col gap-2 max-h-40 overflow-y-auto">
 						{#each faces as face (face.id)}
 							<div class="flex items-center justify-between rounded-md bg-surface-800 px-3 py-2 text-sm">
 								<span class="text-surface-300">{new Date(face.created_at).toLocaleDateString('id-ID')}</span>
@@ -203,6 +235,47 @@
 					</table>
 				</div>
 			{/if}
+		</div>
+	</div>
+{/if}
+
+<!-- Modal Tambah Wajah -->
+{#if showFaceModal}
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+		<div class="w-full max-w-sm rounded-xl border border-surface-700 bg-surface-900 p-6 shadow-xl">
+			<h2 class="mb-1 text-lg font-semibold text-surface-50">Tambah Wajah — {customer?.name}</h2>
+			<p class="mb-4 text-xs text-surface-400">Foto dari sudut berbeda meningkatkan akurasi deteksi</p>
+
+			<label class="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-surface-600 py-6 hover:border-primary-500">
+				<span class="text-3xl">📷</span>
+				<span class="text-sm text-surface-400">Pilih foto wajah</span>
+				<span class="text-xs text-surface-500">Depan, kiri 45°, kanan 45°, atas/bawah</span>
+				<input type="file" accept="image/*" onchange={handleFaceFile} class="hidden" />
+			</label>
+
+			{#if facePreview}
+				<div class="mt-3 overflow-hidden rounded-lg border border-surface-700">
+					<img src={facePreview} alt="Preview" class="h-40 w-full object-cover" />
+				</div>
+			{/if}
+
+			{#if faceError}
+				<p class="mt-2 text-xs text-error-400">{faceError}</p>
+			{/if}
+
+			<div class="mt-4 flex gap-2">
+				<button
+					onclick={() => { showFaceModal = false; }}
+					class="flex-1 rounded-md border border-surface-600 px-4 py-2 text-sm text-surface-300 hover:bg-surface-800">
+					Batal
+				</button>
+				<button
+					onclick={saveFace}
+					disabled={savingFace || !faceFile}
+					class="flex-1 rounded-md bg-primary-500 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-400 disabled:opacity-50">
+					{savingFace ? 'Menyimpan...' : 'Simpan Wajah'}
+				</button>
+			</div>
 		</div>
 	</div>
 {/if}

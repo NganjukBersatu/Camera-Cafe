@@ -47,7 +47,4 @@
 			{@render children()}
 		</div>
 	</main>
-
-	<!-- Notification queue overlay -->
-	<NotificationQueue />
 </div>
