@@ -66,6 +66,13 @@ def process_frame_task(frame_b64: str, camera_id: str = "webcam-kasir"):
                     "matched": False,
                     "bbox": bbox
                 })
+                unknown_cooldown = r.get("cooldown:unknown")
+                if not unknown_cooldown:
+                    r.publish("recognition_events", json.dumps({
+                        "event_type": "unknown_detected",
+                        "camera_id": camera_id,
+                        "detected_at": datetime.now(timezone.utc).isoformat(),
+                    }))
                 results.append({"success": False, "message": "Wajah tidak dikenali"})
                 continue
 

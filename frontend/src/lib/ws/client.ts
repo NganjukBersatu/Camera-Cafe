@@ -1,5 +1,5 @@
 import type { WsPayload } from '$lib/types';
-import { notifications } from '$lib/stores/notifications';
+import { notifications, unknownNotifications } from '$lib/stores/notifications';
 import { systemHealth, wsConnected } from '$lib/stores/systemHealth';
 
 const WS_URL = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8000/ws';
@@ -18,6 +18,8 @@ function isWsPayload(data: unknown): data is WsPayload {
 function handlePayload(payload: WsPayload): void {
 	if (payload.event_type === 'customer_detected') {
 		notifications.add(payload);
+	} else if (payload.event_type === 'unknown_detected') {
+		unknownNotifications.add();
 	} else if (payload.event_type === 'system_health') {
 		systemHealth.setAll(payload.health);
 	}
