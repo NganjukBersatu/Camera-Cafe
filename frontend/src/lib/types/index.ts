@@ -89,12 +89,24 @@ export interface WsSystemHealthPayload {
 	health: SystemHealth;
 }
 
-export type WsPayload = WsCustomerDetectedPayload | WsNoMatchPayload | WsSystemHealthPayload;
+export type WsPayload = WsCustomerDetectedPayload | WsNoMatchPayload | WsSystemHealthPayload | WsUnknownDetectedPayload;
 
 // Notifikasi di queue dashboard kasir
 export interface Notification {
 	id: string;
 	payload: WsCustomerDetectedPayload;
+	received_at: number;
+	dismissed: boolean;
+}
+
+export interface WsUnknownDetectedPayload {
+	event_type: 'unknown_detected';
+	camera_id: string;
+	detected_at: string;
+}
+
+export interface UnknownNotification {
+	id: string;
 	received_at: number;
 	dismissed: boolean;
 }

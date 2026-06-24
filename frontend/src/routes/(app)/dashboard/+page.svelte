@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { activeNotifications, notifications } from '$lib/stores/notifications';
+	import { activeNotifications, notifications, activeUnknownNotifications, unknownNotifications } from '$lib/stores/notifications';
 	import { wsConnected } from '$lib/stores/systemHealth';
 	import { createWsClient } from '$lib/ws/client';
 	import { api } from '$lib/api/client';
@@ -109,7 +109,6 @@
 					alt="Live stream kamera"
 					class="w-full h-full object-contain bg-black"
 				/>
-				<!-- Overlay nama -->
 				{#if $activeNotifications.length > 0}
 					<div class="absolute bottom-0 left-0 right-0 flex flex-wrap gap-2 p-3">
 						{#each $activeNotifications as notif (notif.id)}
@@ -124,13 +123,40 @@
 
 		<!-- Kolom kanan — Notifikasi -->
 		<div class="flex flex-col gap-3 overflow-y-auto">
-			{#if $activeNotifications.length === 0}
+			{#if $activeNotifications.length === 0 && $activeUnknownNotifications.length === 0}
 				<div class="flex flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-surface-700 text-center p-6 h-full">
 					<p class="text-4xl">📡</p>
 					<p class="font-semibold text-surface-300">Menunggu pelanggan</p>
 					<p class="text-sm text-surface-500">Notifikasi muncul otomatis saat kamera mendeteksi pelanggan</p>
 				</div>
 			{:else}
+				<!-- Card Unknown -->
+				{#each $activeUnknownNotifications as notif (notif.id)}
+					<div class="rounded-xl border border-warning-700 bg-warning-900/20 p-4 shadow-lg">
+						<div class="flex items-start justify-between">
+							<div>
+								<p class="font-bold text-lg text-warning-300">Wajah Tidak Dikenal</p>
+								<p class="mt-1 text-xs text-surface-500">{timeAgo(notif.received_at)}</p>
+							</div>
+							<button
+								onclick={() => unknownNotifications.dismiss(notif.id)}
+								class="text-surface-400 hover:text-surface-200">
+								✕
+							</button>
+						</div>
+						<p class="mt-2 text-xs text-surface-400">Pelanggan belum terdaftar di sistem</p>
+						<div class="mt-3">
+							<a
+								href="/enrollment"
+								onclick={() => unknownNotifications.dismiss(notif.id)}
+								class="block w-full rounded-md bg-warning-600 py-2 text-center text-sm font-semibold text-white hover:bg-warning-500">
+								+ Daftarkan Pelanggan
+							</a>
+						</div>
+					</div>
+				{/each}
+
+				<!-- Card Pelanggan Dikenal -->
 				{#each $activeNotifications as notif (notif.id)}
 					<div class="rounded-xl border border-surface-700 bg-surface-900 p-4 shadow-lg">
 						<div class="flex items-start justify-between">
