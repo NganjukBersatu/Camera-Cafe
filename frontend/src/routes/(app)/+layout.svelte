@@ -6,19 +6,26 @@
 	let { children } = $props();
 
 	const navItems = [
-		{ href: '/dashboard', label: 'Dashboard', icon: '⬛' },
-		{ href: '/customers', label: 'Pelanggan', icon: '👤' },
-		{ href: '/enrollment', label: 'Enrollment', icon: '➕' },
-		{ href: '/visits', label: 'Kunjungan', icon: '📋' }
+		{ href: '/dashboard', label: 'Dashboard', icon: 'ti-layout-dashboard' },
+		{ href: '/customers', label: 'Pelanggan', icon: 'ti-user' },
+		{ href: '/enrollment', label: 'Enrollment', icon: 'ti-user-plus' },
+		{ href: '/visits', label: 'Kunjungan', icon: 'ti-calendar-stats' }
 	] as const;
 </script>
 
 <div class="flex h-screen overflow-hidden bg-surface-950 text-surface-50">
 	<!-- Sidebar -->
 	<aside class="flex w-56 flex-col border-r border-surface-700 bg-surface-900">
-		<div class="border-b border-surface-700 px-4 py-4">
-			<p class="text-xs font-semibold uppercase tracking-widest text-surface-400">Camera Cafe</p>
-			<p class="text-lg font-bold text-primary-400">CRM</p>
+		<div class="border-b border-surface-700 px-4 py-5">
+			<div class="flex items-center gap-2.5">
+				<div class="flex size-8 items-center justify-center rounded-lg bg-primary-500/20">
+					<i class="ti ti-camera text-primary-400" style="font-size:18px" aria-hidden="true"></i>
+				</div>
+				<div>
+					<p class="text-sm font-bold text-surface-50 leading-none">Camera Cafe</p>
+					<p class="text-xs text-primary-400 font-semibold tracking-wider mt-0.5">CRM</p>
+				</div>
+			</div>
 		</div>
 
 		<nav class="flex flex-col gap-1 p-2">
@@ -30,7 +37,9 @@
 						? 'bg-primary-500/20 font-semibold text-primary-300'
 						: 'text-surface-300 hover:bg-surface-700 hover:text-surface-50'}"
 				>
-					<span>{item.icon}</span>
+					<span>
+						<i class="ti {item.icon}" aria-hidden="true"></i>
+					</span>
 					<span>{item.label}</span>
 				</a>
 			{/each}

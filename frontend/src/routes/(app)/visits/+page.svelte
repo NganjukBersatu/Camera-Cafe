@@ -9,6 +9,10 @@
 	let error = $state<string | null>(null);
 	let dateFrom = $state('');
 	let dateTo = $state('');
+	let page = $state(1);
+	const size = 20;
+
+	let totalPages = $derived(Math.ceil(total / size));
 
 	async function load(): Promise<void> {
 		loading = true;
@@ -16,7 +20,8 @@
 		try {
 			const res = await api.visits.list({
 				date_from: dateFrom || undefined,
-				date_to: dateTo || undefined
+				date_to: dateTo || undefined,
+				page
 			});
 			visits = res.items;
 			total = res.total;
@@ -25,6 +30,30 @@
 		} finally {
 			loading = false;
 		}
+	}
+
+	function applyFilter(): void {
+		page = 1;
+		void load();
+	}
+
+	function goToPage(p: number): void {
+		if (p < 1 || p > totalPages) return;
+		page = p;
+		void load();
+	}
+
+	// Buat array halaman yang ditampilkan (maks 5 halaman di sekitar halaman aktif)
+	function getPageNumbers(): (number | '...')[] {
+		if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+		const pages: (number | '...')[] = [1];
+		if (page > 3) pages.push('...');
+		for (let i = Math.max(2, page - 1); i <= Math.min(totalPages - 1, page + 1); i++) {
+			pages.push(i);
+		}
+		if (page < totalPages - 2) pages.push('...');
+		pages.push(totalPages);
+		return pages;
 	}
 
 	onMount(() => {
@@ -58,14 +87,17 @@
 			/>
 		</div>
 		<div class="flex items-end">
-			<button onclick={load} class="rounded-md bg-surface-700 px-4 py-2 text-sm text-surface-200 hover:bg-surface-600">
+			<button onclick={applyFilter} class="rounded-md bg-surface-700 px-4 py-2 text-sm text-surface-200 hover:bg-surface-600">
 				Filter
 			</button>
 		</div>
 	</div>
 
 	{#if loading}
-		<div class="flex items-center justify-center py-20 text-surface-400">Memuat...</div>
+		<div class="flex items-center justify-center py-20 text-surface-400">
+			<i class="ti ti-loader-2 animate-spin mr-2" aria-hidden="true"></i>
+			Memuat...
+		</div>
 
 	{:else if error}
 		<div class="rounded-xl border border-error-800 bg-error-900/20 p-6 text-center">
@@ -76,7 +108,7 @@
 
 	{:else if visits.length === 0}
 		<div class="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-surface-700 py-20 text-center">
-			<p class="text-4xl">📋</p>
+			<i class="ti ti-history-off text-surface-500" style="font-size: 32px" aria-hidden="true"></i>
 			<p class="font-semibold text-surface-300">Belum ada kunjungan</p>
 			<p class="text-sm text-surface-500">Kunjungan dicatat otomatis saat pelanggan terdeteksi kamera.</p>
 		</div>
@@ -99,17 +131,74 @@
 							</td>
 							<td class="px-4 py-3">
 								<a href="/customers/{visit.customer_id}" class="font-medium text-primary-400 hover:underline">
-    								{visit.customer_name ?? 'Pelanggan'}
+									{visit.customer_name ?? 'Pelanggan'}
 								</a>
 							</td>
 							<td class="px-4 py-3 text-surface-400">
-								{visit.source === 'auto_recognition' ? '🎥 Auto' : '✋ Manual'}
+								{#if visit.source === 'auto_recognition'}
+									<div class="flex items-center gap-2">
+										<i class="ti ti-camera text-primary-500 text-lg" aria-hidden="true"></i>
+										<span>Auto</span>
+									</div>
+								{:else}
+									<div class="flex items-center gap-2">
+										<i class="ti ti-hand-click text-warning-500 text-lg" aria-hidden="true"></i>
+										<span>Manual</span>
+									</div>
+								{/if}
 							</td>
 						</tr>
 					{/each}
 				</tbody>
 			</table>
 		</div>
-		<p class="text-xs text-surface-500">{total} kunjungan ditemukan</p>
+
+		<!-- Footer: info + pagination -->
+		<div class="flex items-center justify-between">
+			<p class="text-xs text-surface-500">
+				Menampilkan {(page - 1) * size + 1}–{Math.min(page * size, total)} dari {total} kunjungan
+			</p>
+
+			{#if totalPages > 1}
+				<div class="flex items-center gap-1">
+					<!-- Prev -->
+					<button
+						onclick={() => goToPage(page - 1)}
+						disabled={page === 1}
+						class="flex size-8 items-center justify-center rounded-md text-surface-400 hover:bg-surface-700 hover:text-surface-100 disabled:cursor-not-allowed disabled:opacity-30"
+						aria-label="Halaman sebelumnya"
+					>
+						<i class="ti ti-chevron-left" aria-hidden="true"></i>
+					</button>
+
+					<!-- Nomor halaman -->
+					{#each getPageNumbers() as p}
+						{#if p === '...'}
+							<span class="flex size-8 items-center justify-center text-xs text-surface-500">…</span>
+						{:else}
+							<button
+								onclick={() => goToPage(p)}
+								class="flex size-8 items-center justify-center rounded-md text-xs font-medium transition-colors
+									{page === p
+										? 'bg-primary-500 text-white'
+										: 'text-surface-400 hover:bg-surface-700 hover:text-surface-100'}"
+							>
+								{p}
+							</button>
+						{/if}
+					{/each}
+
+					<!-- Next -->
+					<button
+						onclick={() => goToPage(page + 1)}
+						disabled={page === totalPages}
+						class="flex size-8 items-center justify-center rounded-md text-surface-400 hover:bg-surface-700 hover:text-surface-100 disabled:cursor-not-allowed disabled:opacity-30"
+						aria-label="Halaman berikutnya"
+					>
+						<i class="ti ti-chevron-right" aria-hidden="true"></i>
+					</button>
+				</div>
+			{/if}
+		</div>
 	{/if}
 </div>

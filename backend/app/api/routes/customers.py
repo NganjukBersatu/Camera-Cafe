@@ -80,6 +80,14 @@ def update_customer(customer_id: str, body: CustomerUpdate, db: Session = Depend
     db.refresh(customer)
     return CustomerResponse.model_validate(customer)
 
+@router.delete("/{customer_id}", status_code=204)
+def delete_customer(customer_id: str, db: Session = Depends(get_db)):
+    customer = db.get(Customer, customer_id)
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer tidak ditemukan")
+    db.delete(customer)
+    db.commit()
+
 
 @router.get("/{customer_id}/faces", response_model=list[CustomerFaceResponse])
 def get_faces(customer_id: str, db: Session = Depends(get_db)):

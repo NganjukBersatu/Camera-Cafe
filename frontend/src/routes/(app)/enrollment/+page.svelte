@@ -1,6 +1,5 @@
 <script lang="ts">
     import { api } from '$lib/api/client';
-    import { onDestroy } from 'svelte';
 
     type Step = 'form' | 'done';
     type PhotoMode = 'upload' | 'camera';
@@ -18,56 +17,33 @@
     let selectedFile = $state<File | null>(null);
     let previewUrl = $state<string | null>(null);
 
-    // Kamera state
     let photoMode = $state<PhotoMode>('upload');
-    let videoEl = $state<HTMLVideoElement | null>(null);
-    let canvasEl = $state<HTMLCanvasElement | null>(null);
-    let stream = $state<MediaStream | null>(null);
     let cameraError = $state<string | null>(null);
-
-    async function startCamera(): Promise<void> {
-        cameraError = null;
-        try {
-            stream = await navigator.mediaDevices.getUserMedia({ video: true });
-            if (videoEl) videoEl.srcObject = stream;
-        } catch (e) {
-            cameraError = 'Tidak bisa akses kamera. Pastikan browser punya izin kamera.';
-        }
-    }
-
-    function stopCamera(): void {
-        stream?.getTracks().forEach((t) => t.stop());
-        stream = null;
-    }
 
     function switchMode(mode: PhotoMode): void {
         photoMode = mode;
         selectedFile = null;
         previewUrl = null;
-        if (mode === 'camera') {
-            setTimeout(() => startCamera(), 100);
-        } else {
-            stopCamera();
-        }
+        cameraError = null;
     }
 
-    function capturePhoto(): void {
-        if (!videoEl || !canvasEl) return;
-        canvasEl.width = videoEl.videoWidth;
-        canvasEl.height = videoEl.videoHeight;
-        canvasEl.getContext('2d')?.drawImage(videoEl, 0, 0);
-        canvasEl.toBlob((blob) => {
-            if (!blob) return;
-            selectedFile = new File([blob], 'capture.jpg', { type: 'image/jpeg' });
+    async function captureFromStream(): Promise<void> {
+        cameraError = null;
+        try {
+            const res = await fetch('http://localhost:8000/cameras/stream/snapshot');
+            if (!res.ok) throw new Error('Gagal ambil snapshot');
+            const blob = await res.blob();
+            selectedFile = new File([blob], 'snapshot.jpg', { type: 'image/jpeg' });
             previewUrl = URL.createObjectURL(blob);
-            stopCamera();
-        }, 'image/jpeg', 0.9);
+        } catch (e) {
+            cameraError = 'Gagal mengambil foto dari kamera';
+        }
     }
 
     function retakePhoto(): void {
         selectedFile = null;
         previewUrl = null;
-        startCamera();
+        cameraError = null;
     }
 
     function handleFileSelect(e: Event): void {
@@ -94,7 +70,6 @@
             enrolledCustomerId = customer.id;
             enrolledName = customer.name;
             step = 'done';
-            stopCamera();
         } catch (e) {
             error = e instanceof Error ? e.message : 'Enrollment gagal';
         } finally {
@@ -114,10 +89,8 @@
         enrolledName = null;
         error = null;
         photoMode = 'upload';
-        stopCamera();
+        cameraError = null;
     }
-
-    onDestroy(() => stopCamera());
 </script>
 
 <svelte:head><title>Enrollment Pelanggan — Camera Cafe CRM</title></svelte:head>
@@ -130,7 +103,9 @@
 
     {#if step === 'done' && enrolledCustomerId}
         <div class="rounded-xl border border-success-700 bg-success-900/20 p-8 text-center">
-            <p class="text-4xl">✅</p>
+            <div class="flex size-14 items-center justify-center rounded-full bg-success-500/20 mx-auto">
+                <i class="ti ti-circle-check text-success-400" style="font-size:28px" aria-hidden="true"></i>
+            </div>
             <p class="mt-3 text-lg font-semibold text-success-300">Enrollment berhasil!</p>
             <p class="mt-1 text-sm text-surface-400">{enrolledName} telah terdaftar dan siap dikenali kamera.</p>
             <div class="mt-6 flex gap-3 justify-center">
@@ -185,7 +160,7 @@
                 <legend class="font-semibold text-surface-200">Foto Wajah <span class="text-error-400">*</span></legend>
 
                 <!-- Toggle Upload / Kamera -->
-                <div class="flex rounded-lg border border-surface-600 overflow-hidden">
+                <div class="flex overflow-hidden rounded-lg border border-surface-600">
                     <button
                         type="button"
                         onclick={() => switchMode('upload')}
@@ -206,7 +181,7 @@
                 {#if photoMode === 'upload'}
                     {#if !previewUrl}
                         <label class="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-surface-600 py-8 hover:border-primary-500">
-                            <span class="text-3xl">📷</span>
+                            <i class="ti ti-camera-plus text-surface-500" style="font-size:32px" aria-hidden="true"></i>
                             <span class="text-sm text-surface-400">Pilih foto wajah pelanggan</span>
                             <span class="text-xs text-surface-500">JPG, PNG, maks 5MB</span>
                             <input type="file" accept="image/*" onchange={handleFileSelect} class="hidden" />
@@ -226,23 +201,26 @@
                 <!-- Mode Kamera -->
                 {#if photoMode === 'camera'}
                     {#if cameraError}
-                        <p class="text-sm text-error-400">{cameraError}</p>
-                    {:else if !previewUrl}
+                        <div class="rounded-md border border-error-700 bg-error-900/20 p-3">
+                            <p class="text-sm text-error-400">{cameraError}</p>
+                        </div>
+                    {/if}
+
+                    {#if !previewUrl}
                         <div class="relative overflow-hidden rounded-lg border border-surface-700 bg-black">
-                            <video
-                                bind:this={videoEl}
-                                autoplay
-                                playsinline
-                                class="w-full h-72 object-cover">
-                            </video>
+                            <img
+                                src="http://localhost:8000/cameras/stream/live"
+                                alt="Preview kamera"
+                                class="h-72 w-full object-cover"
+                            />
                             <button
                                 type="button"
-                                onclick={capturePhoto}
-                                class="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-white px-6 py-2 text-sm font-bold text-black hover:bg-surface-200">
+                                onclick={captureFromStream}
+                                class="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-white px-6 py-2 text-sm font-bold text-black hover:bg-surface-200"
+                            >
                                 Ambil Foto
                             </button>
                         </div>
-                        <canvas bind:this={canvasEl} class="hidden"></canvas>
                     {:else}
                         <div class="overflow-hidden rounded-lg border border-surface-700">
                             <img src={previewUrl} alt="Preview wajah" class="h-72 w-full object-cover" />

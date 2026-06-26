@@ -11,7 +11,7 @@ import base64
 import time
 from app.config import settings
 import uuid
-
+import io
 
 router = APIRouter(prefix="/cameras", tags=["cameras"])
 
@@ -94,3 +94,15 @@ def stream_camera():
         generate(),
         media_type="multipart/x-mixed-replace; boundary=frame"
     )
+
+@router.get("/stream/snapshoot")
+def snapshoot(db : Session = Depends(get_db)):
+    """Ambil satu frame dari stream aktif"""
+    import cv2
+    cap = cv2.VideoCapture(0)
+    ret, frame = rep.read()
+    cap.release()
+    if not ret:
+        raise HTTPException(status_code=503, detail="Kamera tidak tersedia")
+    _, buf = cv2.imencode('.jpg', frame)
+    return StreamingResponse(io.BytesIO(buf.tobytes()), media_type="image/jpeg")
