@@ -44,6 +44,10 @@ export const api = {
             request('/customers', { method: 'POST', body: JSON.stringify(body) }),
         update: (id: string, body: Partial<Pick<Customer, 'name' | 'contact' | 'notes' | 'preferences'>>): Promise<Customer> =>
             request(`/customers/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+        delete: (id: String): Promise<void> =>
+            fetch(`${BASE_URL}/customers/${id}`, { method: 'DELETE' }).then(r => {
+                if (!r.ok) throw new ApiError(r.status, 'API error ${r.status}: /customers/${id}');
+            }),
         faces: (id: string): Promise<CustomerFace[]> => request(`/customers/${id}/faces`),
         deleteFace: (customerId: string, faceId: string): Promise<void> =>
             request(`/customers/${customerId}/faces/${faceId}`, { method: 'DELETE' }),

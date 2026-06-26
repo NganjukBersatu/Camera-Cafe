@@ -22,7 +22,7 @@ class Customer(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     faces: Mapped[list["CustomerFace"]] = relationship(back_populates="customer", cascade="all, delete-orphan")
-    visits: Mapped[list["Visit"]] = relationship(back_populates="customer")
+    visits: Mapped[list["Visit"]] = relationship(back_populates="customer", cascade="all, delete-orphan")
 
 
 class CustomerFace(Base):
