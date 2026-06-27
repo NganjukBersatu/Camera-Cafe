@@ -95,14 +95,12 @@ def stream_camera():
         media_type="multipart/x-mixed-replace; boundary=frame"
     )
 
-@router.get("/stream/snapshoot")
-def snapshoot(db : Session = Depends(get_db)):
-    """Ambil satu frame dari stream aktif"""
-    import cv2
-    cap = cv2.VideoCapture(0)
-    ret, frame = rep.read()
-    cap.release()
-    if not ret:
-        raise HTTPException(status_code=503, detail="Kamera tidak tersedia")
-    _, buf = cv2.imencode('.jpg', frame)
-    return StreamingResponse(io.BytesIO(buf.tobytes()), media_type="image/jpeg")
+@router.get("/stream/snapshot")
+def snapshot():
+    """Ambil satu frame dari Redis (sama dengan stream live)"""
+    r = redis.from_url(settings.redis_url)
+    frame_b64 = r.get("latest_frame")
+    if not frame_b64:
+        raise HTTPException(status_code=503, detail="Tidak ada frame tersedia")
+    frame_bytes = base64.b64decode(frame_b64)
+    return StreamingResponse(io.BytesIO(frame_bytes), media_type="image/jpeg")
