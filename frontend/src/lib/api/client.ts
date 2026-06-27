@@ -50,7 +50,9 @@ export const api = {
             }),
         faces: (id: string): Promise<CustomerFace[]> => request(`/customers/${id}/faces`),
         deleteFace: (customerId: string, faceId: string): Promise<void> =>
-            request(`/customers/${customerId}/faces/${faceId}`, { method: 'DELETE' }),
+            fetch(`${BASE_URL}/customers/${customerId}/faces/${faceId}`, { method: 'DELETE'}).then(r => {
+                if (!r.ok) throw new ApiError(r.status, `API error ${r.status}`);
+            }),
         visits: (id: string, params?: { page?: number }): Promise<PaginatedResponse<Visit>> => {
             const query = new URLSearchParams();
             if (params?.page) query.set('page', String(params.page));

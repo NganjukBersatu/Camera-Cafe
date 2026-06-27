@@ -220,7 +220,17 @@
 										{visit.order_note ?? '—'}
 									</td>
 									<td class="px-4 py-2 text-surface-400">
-										{visit.source === 'auto_recognition' ? '🎥 Auto' : '✋ Manual'}
+										{#if visit.source === 'auto_recognition'}
+											<div class="flex items-center gap-2">
+												<i class="ti ti-camera text-primary-500 text-lg" aria-hidden="true"></i>
+												<span>Auto</span>
+											</div>
+										{:else}
+											<div class="flex items-center gap-2">
+												<i class="ti ti-hand-click text-warning-500 text-lg" aria-hidden="true"></i>
+												<span>Manual</span>
+											</div>
+										{/if}
 									</td>
 									<td class="px-4 py-2">
 										<button

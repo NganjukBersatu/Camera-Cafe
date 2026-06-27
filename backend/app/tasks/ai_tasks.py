@@ -50,7 +50,7 @@ def process_frame_task(frame_b64: str, camera_id: str = "webcam-kasir"):
         for face in faces:
             embedding = face["embedding"]
             bbox = face["bbox"]
-            matches = search_face(qdrant, embedding, threshold=0.5)
+            matches = search_face(qdrant, embedding, threshold=0.35)
 
             # Tidak dikenali
             if not matches:
@@ -68,6 +68,7 @@ def process_frame_task(frame_b64: str, camera_id: str = "webcam-kasir"):
                 })
                 unknown_cooldown = r.get("cooldown:unknown")
                 if not unknown_cooldown:
+                    r.setex("cooldown:unknown", 30, "1")
                     r.publish("recognition_events", json.dumps({
                         "event_type": "unknown_detected",
                         "camera_id": camera_id,
@@ -84,6 +85,15 @@ def process_frame_task(frame_b64: str, camera_id: str = "webcam-kasir"):
                 detections.append({
                     "customer_name": "Unknown",
                     "matched": False,
+                    "bbox": bbox
+                })
+                continue
+
+            if not customer.is_active:
+                detections.append({
+                    "customer_name": customer.name,
+                    "similarity": matches[0].score,
+                    "matched": True,
                     "bbox": bbox
                 })
                 continue
