@@ -1,7 +1,7 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
-from app.api.routes import health, customers, visits, enrollment, cameras, recognition
+from app.api.routes import health, customers, visits, enrollment, cameras, recognition, menu
 import asyncio
 import redis.asyncio as aioredis
 import json
@@ -22,6 +22,7 @@ app.include_router(visits.router)
 app.include_router(enrollment.router)
 app.include_router(cameras.router)
 app.include_router(recognition.router)
+app.include_router(menu.router)
 
 
 class ConnectionManager:

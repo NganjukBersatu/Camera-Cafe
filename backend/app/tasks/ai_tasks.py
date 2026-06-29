@@ -50,7 +50,7 @@ def process_frame_task(frame_b64: str, camera_id: str = "webcam-kasir"):
         for face in faces:
             embedding = face["embedding"]
             bbox = face["bbox"]
-            matches = search_face(qdrant, embedding, threshold=0.35)
+            matches = search_face(qdrant, embedding, threshold=0.5)
 
             # Tidak dikenali
             if not matches:

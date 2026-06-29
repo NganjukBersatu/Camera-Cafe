@@ -32,7 +32,8 @@ async def enroll_face(
         raise HTTPException(status_code=400, detail="Gambar tidak valid")
 
     pipeline = AIPipeline.get_instance()
-    faces = pipeline.process_frame(frame)
+    raw_faces = pipeline.get_faces(frame)
+    faces = [{"bbox": f.bbox.tolist(), "det_score": float(f.det_score), "embedding": f.embedding.tolist()} for f in raw_faces]
 
     if not faces:
         raise HTTPException(status_code=400, detail="Tidak ada wajah terdeteksi")

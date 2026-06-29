@@ -5,7 +5,7 @@ from websockets import route
 from app.database import get_db
 from app.models.camera import CameraSource
 from app.schemas.camera import (CameraCreate, CameraUpdate, CameraResponse, PaginatedCameras)
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 import redis
 import base64
 import time
@@ -50,6 +50,34 @@ def create_camera(body: CameraCreate, db: Session = Depends(get_db)):
     db.refresh(camera)
     return CameraResponse.model_validate(camera)
 
+@router.get("/stream/live")
+def stream_camera():
+    def generate():
+        r = redis.from_url(settings.redis_url)
+        while True:
+            frame_b64 = r.get("latest_frame")
+            if frame_b64:
+                frame_bytes = base64.b64decode(frame_b64)
+                yield (
+                    b"--frame\r\n"
+                    b"Content-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n"
+                )
+            time.sleep(0.1)
+
+    return StreamingResponse(
+        generate(),
+        media_type="multipart/x-mixed-replace; boundary=frame"
+    )
+
+@router.get("/stream/snapshot")
+def snapshot():
+    r = redis.from_url(settings.redis_url)
+    frame_b64 = r.get("latest_frame")
+    if not frame_b64:
+        raise HTTPException(status_code=503, detail="Tidak ada frame tersedia")
+    frame_bytes = base64.b64decode(frame_b64)
+    return Response(content=frame_bytes, media_type="image/jpeg")
+
 @router.get("/{camera_id}", response_model=CameraResponse)
 def get_camera(camera_id: str, db: Session = Depends(get_db)):
     camera = db.get(CameraSource, camera_id)
@@ -75,32 +103,3 @@ def delete_camera(camera_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Camera tidak ditemukan")
     db.delete(camera)
     db.commit()
-
-@router.get("/stream/live")
-def stream_camera():
-    def generate():
-        r = redis.from_url(settings.redis_url)
-        while True:
-            frame_b64 = r.get("latest_frame")
-            if frame_b64:
-                frame_bytes = base64.b64decode(frame_b64)
-                yield (
-                    b"--frame\r\n"
-                    b"Content-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n"
-                )
-            time.sleep(0.1)
-
-    return StreamingResponse(
-        generate(),
-        media_type="multipart/x-mixed-replace; boundary=frame"
-    )
-
-@router.get("/stream/snapshot")
-def snapshot():
-    """Ambil satu frame dari Redis (sama dengan stream live)"""
-    r = redis.from_url(settings.redis_url)
-    frame_b64 = r.get("latest_frame")
-    if not frame_b64:
-        raise HTTPException(status_code=503, detail="Tidak ada frame tersedia")
-    frame_bytes = base64.b64decode(frame_b64)
-    return StreamingResponse(io.BytesIO(frame_bytes), media_type="image/jpeg")

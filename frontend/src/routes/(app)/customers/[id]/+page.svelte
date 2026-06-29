@@ -304,7 +304,7 @@
 				</button>
 			{/if}
 
-			<label class="mb-1 block text-xs text-surface-400">Atau ketik pesanan:</label>
+			<label for="order-imput" class="mb-1 block text-xs text-surface-400">Atau ketik pesanan:</label>
 			<input
 				type="text"
 				bind:value={orderInput}
