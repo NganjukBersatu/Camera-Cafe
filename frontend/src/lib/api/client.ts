@@ -1,4 +1,4 @@
-import type { Customer, Visit, RecognitionEvent, CameraSource, SystemHealth, PaginatedResponse, CustomerFace } from '$lib/types';
+import type { Customer, Visit, RecognitionEvent, CameraSource, SystemHealth, PaginatedResponse, CustomerFace, MenuItem } from '$lib/types';
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
@@ -122,6 +122,34 @@ export const api = {
                 body: formData
             }).then((r) => {
                 if (!r.ok) throw new ApiError(r.status, 'Recognize failed');
+                return r.json();
+            });
+        }
+    },
+
+    menu: {
+        list: (params?: { category?: string; available_only?: boolean }): Promise<PaginatedResponse<MenuItem>> => {
+            const query = new URLSearchParams();
+            if (params?.category) query.set('category', params.category);
+            if (params?.available_only) query.set('available_only', 'true');
+            return request(`/menu?${query}`);
+        },
+        create: (body: Pick<MenuItem, 'name' | 'price'> & Partial<Pick<MenuItem, 'description' | 'category' | 'is_available'>>): Promise<MenuItem> =>
+            request('/menu', { method: 'POST', body: JSON.stringify(body) }),
+        update: (id: string, body: Partial<Pick<MenuItem, 'name' | 'price' | 'description' | 'category' | 'is_available'>>): Promise<MenuItem> =>
+            request(`/menu/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+        delete: (id: string): Promise<void> =>
+            fetch(`${BASE_URL}/menu/${id}`, { method: 'DELETE' }).then(r => {
+                if (!r.ok) throw new ApiError(r.status, `API error ${r.status}`);
+            }),
+        uploadImage: (id: string, file: File): Promise<MenuItem> => {
+            const formData = new FormData();
+            formData.append('file', file);
+            return fetch(`${BASE_URL}/menu/${id}/image`, {
+                method: 'POST',
+                body: formData
+            }).then(r => {
+                if (!r.ok) throw new ApiError(r.status, 'Upload gambar gagal');
                 return r.json();
             });
         }

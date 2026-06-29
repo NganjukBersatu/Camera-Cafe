@@ -118,3 +118,15 @@ export interface PaginatedResponse<T> {
 	page: number;
 	size: number;
 }
+export interface MenuItem {
+	id: string;
+	name: string;
+	description: string | null;
+	price: number;
+	category: string | null;
+	image_path: string | null;
+	image_url: string | null;
+	is_available: boolean;
+	created_at: string;
+	updated_at: string;
+}

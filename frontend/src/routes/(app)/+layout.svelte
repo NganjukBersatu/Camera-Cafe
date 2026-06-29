@@ -9,7 +9,8 @@
 		{ href: '/dashboard', label: 'Dashboard', icon: 'ti-layout-dashboard' },
 		{ href: '/customers', label: 'Pelanggan', icon: 'ti-user' },
 		{ href: '/enrollment', label: 'Enrollment', icon: 'ti-user-plus' },
-		{ href: '/visits', label: 'Kunjungan', icon: 'ti-calendar-stats' }
+		{ href: '/visits', label: 'Kunjungan', icon: 'ti-calendar-stats' },
+		{ href: '/settings', label: 'Settings', icon: 'ti-settings'},
 	] as const;
 </script>
 
