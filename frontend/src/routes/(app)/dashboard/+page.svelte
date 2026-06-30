@@ -257,19 +257,19 @@
 
 						{#if notif.payload.preferences}
 							<div class="mt-3 rounded-lg bg-surface-800 px-3 py-2">
-								<p class="text-xs text-surface-500">☕ Biasanya pesan</p>
+								<p class="text-xs text-surface-500">Biasanya pesan</p>
 								<p class="mt-0.5 text-sm font-medium text-surface-100">{notif.payload.preferences}</p>
 							</div>
 						{/if}
 
 						{#if notif.payload.last_visit}
-							<p class="mt-2 text-xs text-surface-500">🕐 Terakhir: {formatDate(notif.payload.last_visit)}</p>
+							<p class="mt-2 text-xs text-surface-500">Terakhir: {formatDate(notif.payload.last_visit)}</p>
 						{/if}
 
 						<div class="mt-3 flex gap-2">
 							<button onclick={() => openOrderModal(notif)}
 								class="flex-1 rounded-lg bg-success-600 py-2 text-xs font-semibold text-white hover:bg-success-500">
-								✏️ Catat Pesanan
+								Catat Pesanan
 							</button>
 							<a href="/customers/{notif.payload.customer_id}"
 								class="flex-1 rounded-lg bg-surface-700 py-2 text-center text-xs font-semibold text-surface-200 hover:bg-surface-600">
@@ -315,6 +315,19 @@
 					<i class="ti ti-x" style="font-size:18px" aria-hidden="true"></i>
 				</button>
 			</div>
+
+			<!-- Saran pesanan biasanya — menonjol -->
+			{#if modalNotif.payload.preferences}
+				<div class="mx-5 mt-4 flex items-center gap-3 rounded-xl border border-success-600/30 bg-gradient-to-r from-success-500/15 to-success-500/5 px-4 py-3">
+					<div class="flex size-9 shrink-0 items-center justify-center rounded-full bg-success-500/20">
+						<i class="ti ti-sparkles text-success-400" style="font-size:18px" aria-hidden="true"></i>
+					</div>
+					<div class="min-w-0 flex-1">
+						<p class="text-[11px] font-medium uppercase tracking-wide text-success-500/80">Biasanya pesan</p>
+						<p class="truncate text-sm font-semibold text-success-200">{modalNotif.payload.preferences}</p>
+					</div>
+				</div>
+			{/if}
 
 			<!-- Filter kategori -->
 			{#if categories.length > 0}

@@ -1,10 +1,12 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.api.routes import health, customers, visits, enrollment, cameras, recognition, menu
 import asyncio
 import redis.asyncio as aioredis
 import json
+import os
 
 app = FastAPI(title="Camera Cafe CRM", version="0.1.0")
 
@@ -15,6 +17,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+os.makedirs("static/menu", exist_ok=True)
+os.makedirs("static/faces", exist_ok=True)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 app.include_router(health.router)
 app.include_router(customers.router)

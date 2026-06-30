@@ -5,6 +5,7 @@ from app.database import get_db
 from app.models.menu import MenuItem
 from app.schemas.menu import MenuItemCreate, MenuItemUpdate, MenuItemResponse, PaginatedMenuItems
 from app.config import settings
+from pathlib import Path
 import uuid
 import shutil
 import os
@@ -108,23 +109,35 @@ async def upload_menu_image(
     if not item:
         raise HTTPException(status_code=404, detail="Menu tidak ditemukan")
 
-    upload_dir = settings.upload_dir.parent / "menu"
-    os.makedirs(upload_dir, exist_ok=True)
+    upload_dir = Path("static") / "menu"
+    upload_dir.mkdir(parents=True, exist_ok=True)
 
-    filename = f"{item_id}.jpg"
+    ext = Path(file.filename).suffix.lower()
+    if ext not in [".jpg", ".jpeg", ".png", ".webp"]:
+        ext = ".jpg"
+
+    filename = f"{item_id}{ext}"
     filepath = upload_dir / filename
 
-    with open(filepath, "wb") as f:
-        shutil.copyfileobj(file.file, f)
+    with open(filepath, "wb") as buffet:
+        shutil.copyfileobj(file.file, buffet)
 
     item.image_path = f"menu/{filename}"
+
     db.commit()
     db.refresh(item)
 
     image_url = f"{settings.base_url}/static/menu/{filename}"
+
     return MenuItemResponse(
-        id=item.id, name=item.name, description=item.description,
-        price=item.price, category=item.category, image_path=item.image_path,
-        image_url=image_url, is_available=item.is_available,
-        created_at=item.created_at, updated_at=item.updated_at,
+        id=item.id,
+        name=item.name,
+        description=item.description,
+        price=item.price,
+        category=item.category,
+        image_path=item.image_path,
+        image_url=image_url,
+        is_available=item.is_available,
+        created_at=item.created_at,
+        updated_at=item.updated_at,
     )
