@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { api } from '$lib/api/client';
-	import type { Customer, Visit, CustomerFace } from '$lib/types';
+	import type { Customer, Visit, CustomerFace, MenuItem } from '$lib/types';
 
 	const customerId = $derived(page.params['id'] as string);
 
@@ -11,18 +11,25 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 
-	// Modal order state
+	// Modal order — menu grid
 	let showOrderModal = $state(false);
 	let selectedVisit = $state<Visit | null>(null);
-	let orderInput = $state('');
 	let savingOrder = $state(false);
+	let menuItems = $state<MenuItem[]>([]);
+	let menuLoading = $state(false);
+	let selectedCategory = $state<string | null>(null);
+	let cart = $state<Record<string, number>>({});
 
-	// Modal tambah wajah state
+	// Modal tambah wajah
 	let showFaceModal = $state(false);
 	let faceFile = $state<File | null>(null);
 	let facePreview = $state<string | null>(null);
 	let savingFace = $state(false);
 	let faceError = $state<string | null>(null);
+
+	// Konfirmasi hapus wajah
+	let deletingFaceId = $state<string | null>(null);
+	let confirmDeleteFaceId = $state<string | null>(null);
 
 	async function load(): Promise<void> {
 		loading = true;
@@ -43,50 +50,117 @@
 		}
 	}
 
+	async function loadMenu(): Promise<void> {
+		menuLoading = true;
+		try {
+			const res = await api.menu.list({ available_only: true });
+			menuItems = res.items;
+		} catch (e) {
+			console.error('Gagal memuat menu', e);
+		} finally {
+			menuLoading = false;
+		}
+	}
+
 	$effect(() => {
 		void load();
 	});
 
 	async function deleteFace(faceId: string): Promise<void> {
-		if (!confirm('Hapus data wajah ini? Tindakan tidak dapat dibatalkan.')) return;
+		deletingFaceId = faceId;
 		try {
 			await api.customers.deleteFace(customerId, faceId);
 			faces = faces.filter((f) => f.id !== faceId);
+			confirmDeleteFaceId = null;
 		} catch (e) {
 			alert(e instanceof Error ? e.message : 'Gagal menghapus data wajah');
+		} finally {
+			deletingFaceId = null;
 		}
 	}
 
 	const lastOrder = $derived(customer?.preferences ?? null);
 
+	let categories = $derived([...new Set(menuItems.map(m => m.category).filter(Boolean))] as string[]);
+	let filteredMenu = $derived(
+		selectedCategory ? menuItems.filter(m => m.category === selectedCategory) : menuItems
+	);
+
+	function addToCart(id: string): void {
+		cart = { ...cart, [id]: (cart[id] ?? 0) + 1 };
+	}
+
+	function removeFromCart(id: string): void {
+		const qty = cart[id] ?? 0;
+		if (qty <= 1) {
+			const { [id]: _, ...rest } = cart;
+			cart = rest;
+		} else {
+			cart = { ...cart, [id]: qty - 1 };
+		}
+	}
+
+	let cartTotal = $derived(
+		Object.entries(cart).reduce((sum, [id, qty]) => {
+			const item = menuItems.find(m => m.id === id);
+			return sum + (item ? item.price * qty : 0);
+		}, 0)
+	);
+
+	let cartSummary = $derived(
+		Object.entries(cart)
+			.map(([id, qty]) => {
+				const item = menuItems.find(m => m.id === id);
+				return item ? `${item.name} x${qty}` : '';
+			})
+			.filter(Boolean)
+			.join(', ')
+	);
+
 	function openOrderModal(visit: Visit): void {
 		selectedVisit = visit;
-		orderInput = visit.order_note ?? '';
+		cart = {};
+		selectedCategory = null;
 		showOrderModal = true;
+		void loadMenu();
 	}
 
 	function openNewOrderModal(): void {
 		const latest = visits[0] ?? null;
 		selectedVisit = latest;
-		orderInput = lastOrder ?? '';
+		cart = {};
+		selectedCategory = null;
 		showOrderModal = true;
+		void loadMenu();
 	}
 
 	async function saveOrder(): Promise<void> {
-		if (!selectedVisit || !orderInput.trim()) return;
+		if (!cartSummary) return;
 		savingOrder = true;
 		try {
-			await api.visits.updateOrder(selectedVisit.id, orderInput.trim());
-			visits = visits.map((v) =>
-				v.id === selectedVisit!.id ? { ...v, order_note: orderInput.trim() } : v
-			);
-			if (customer) customer = { ...customer, preferences: orderInput.trim() };
+			let visitId: string;
+			if (selectedVisit) {
+				visitId = selectedVisit.id;
+			} else {
+				const newVisit = await api.visits.create({ customer_id: customerId, source: 'manual' });
+				visitId = newVisit.id;
+			}
+			await api.visits.updateOrder(visitId, cartSummary);
+			if (customer) customer = { ...customer, preferences: cartSummary };
 			showOrderModal = false;
+			cart = {};
+			await load();
 		} catch (e) {
 			alert('Gagal menyimpan pesanan');
 		} finally {
 			savingOrder = false;
 		}
+	}
+
+	function formatPrice(price: number): string {
+		return new Intl.NumberFormat('id-ID', {
+			style: 'currency', currency: 'IDR', minimumFractionDigits: 0
+		}).format(price);
 	}
 
 	function handleFaceFile(e: Event): void {
@@ -102,8 +176,8 @@
 		savingFace = true;
 		faceError = null;
 		try {
-			const newFace = await api.enrollment.enroll(customerId, faceFile);
-			await load(); // reload faces
+			await api.enrollment.enroll(customerId, faceFile);
+			await load();
 			showFaceModal = false;
 			faceFile = null;
 			facePreview = null;
@@ -118,7 +192,10 @@
 <svelte:head><title>{customer?.name ?? 'Pelanggan'} — Camera Cafe CRM</title></svelte:head>
 
 {#if loading}
-	<div class="flex items-center justify-center py-20 text-surface-400">Memuat...</div>
+	<div class="flex items-center justify-center gap-2 py-20 text-surface-400">
+		<i class="ti ti-loader-2 animate-spin" aria-hidden="true"></i>
+		<p>Memuat data...</p>
+	</div>
 
 {:else if error}
 	<div class="rounded-xl border border-error-800 bg-error-900/20 p-6 text-center">
@@ -133,7 +210,7 @@
 			<div>
 				<a href="/customers" class="text-sm text-surface-500 hover:text-surface-300">← Kembali</a>
 				<h1 class="mt-1 text-2xl font-bold text-surface-50">{customer.name}</h1>
-				<span class="rounded-full px-2 py-0.5 text-xs font-medium
+				<span class="mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium
 					{customer.status === 'active' ? 'bg-success-500/20 text-success-400' : 'bg-surface-600 text-surface-400'}">
 					{customer.status === 'active' ? 'Aktif' : 'Nonaktif'}
 				</span>
@@ -180,13 +257,43 @@
 			<div class="rounded-xl border border-surface-700 bg-surface-900 p-5">
 				<h2 class="mb-4 font-semibold text-surface-200">Data Wajah ({faces.length})</h2>
 				{#if faces.length === 0}
-					<p class="text-sm text-surface-500">Belum ada data wajah tersimpan.</p>
+					<div class="flex flex-col items-center justify-center gap-2 py-8 text-center">
+						<i class="ti ti-face-id text-surface-600" style="font-size:32px" aria-hidden="true"></i>
+						<p class="text-sm text-surface-500">Belum ada data wajah tersimpan.</p>
+					</div>
 				{:else}
-					<div class="flex flex-col gap-2 max-h-40 overflow-y-auto">
-						{#each faces as face (face.id)}
-							<div class="flex items-center justify-between rounded-md bg-surface-800 px-3 py-2 text-sm">
-								<span class="text-surface-300">{new Date(face.created_at).toLocaleDateString('id-ID')}</span>
-								<button onclick={() => deleteFace(face.id)} class="text-error-400 hover:text-error-300">Hapus</button>
+					<div class="grid grid-cols-3 gap-2">
+						{#each faces as face, i (face.id)}
+							<div class="group relative overflow-hidden rounded-lg border border-surface-700 bg-surface-800">
+								<div class="flex h-24 flex-col items-center justify-center gap-1">
+									<i class="ti ti-face-id text-surface-500" style="font-size:24px" aria-hidden="true"></i>
+									<p class="text-xs text-surface-500">Wajah #{i + 1}</p>
+									<p class="text-xs text-surface-600">{new Date(face.created_at).toLocaleDateString('id-ID')}</p>
+								</div>
+
+								{#if confirmDeleteFaceId === face.id}
+									<div class="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-black/80 p-2">
+										<p class="text-center text-xs font-semibold text-white">Hapus wajah ini?</p>
+										<div class="flex gap-1.5">
+											<button onclick={() => (confirmDeleteFaceId = null)} class="rounded px-2 py-1 text-xs text-surface-300 hover:bg-surface-700">Batal</button>
+											<button
+												onclick={() => deleteFace(face.id)}
+												disabled={deletingFaceId === face.id}
+												class="rounded bg-error-700 px-2 py-1 text-xs text-white hover:bg-error-600 disabled:opacity-50"
+											>
+												{deletingFaceId === face.id ? '...' : 'Hapus'}
+											</button>
+										</div>
+									</div>
+								{:else}
+									<button
+										onclick={() => (confirmDeleteFaceId = face.id)}
+										class="absolute right-1 top-1 hidden rounded bg-black/60 p-1 text-error-400 hover:text-error-300 group-hover:flex"
+										aria-label="Hapus foto"
+									>
+										<i class="ti ti-trash" style="font-size:13px" aria-hidden="true"></i>
+									</button>
+								{/if}
 							</div>
 						{/each}
 					</div>
@@ -213,12 +320,8 @@
 						<tbody class="divide-y divide-surface-700">
 							{#each visits as visit (visit.id)}
 								<tr>
-									<td class="px-4 py-2 text-surface-200">
-										{new Date(visit.visited_at).toLocaleString('id-ID')}
-									</td>
-									<td class="px-4 py-2 text-surface-100">
-										{visit.order_note ?? '—'}
-									</td>
+									<td class="px-4 py-2 text-surface-200">{new Date(visit.visited_at).toLocaleString('id-ID')}</td>
+									<td class="px-4 py-2 text-surface-100">{visit.order_note ?? '—'}</td>
 									<td class="px-4 py-2 text-surface-400">
 										{#if visit.source === 'auto_recognition'}
 											<div class="flex items-center gap-2">
@@ -233,9 +336,7 @@
 										{/if}
 									</td>
 									<td class="px-4 py-2">
-										<button
-											onclick={() => openOrderModal(visit)}
-											class="text-xs text-primary-400 hover:text-primary-300">
+										<button onclick={() => openOrderModal(visit)} class="text-xs text-primary-400 hover:text-primary-300">
 											{visit.order_note ? 'Edit' : 'Catat'}
 										</button>
 									</td>
@@ -251,22 +352,35 @@
 
 <!-- Modal Tambah Wajah -->
 {#if showFaceModal}
-	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-		<div class="w-full max-w-sm rounded-xl border border-surface-700 bg-surface-900 p-6 shadow-xl">
-			<h2 class="mb-1 text-lg font-semibold text-surface-50">Tambah Wajah — {customer?.name}</h2>
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+		role="presentation"
+		onclick={() => { if (!savingFace) showFaceModal = false; }}
+		onkeydown={() => { if (!savingFace) showFaceModal = false; }}
+	>
+		<div
+			class="w-full max-w-sm rounded-xl border border-surface-700 bg-surface-900 p-6 shadow-xl"
+			role="dialog" aria-modal="true" aria-label="Tambah wajah" tabindex="-1"
+			onclick={(e) => e.stopPropagation()}
+			onkeydown={(e) => e.stopPropagation()}
+		>
+			<h2 class="mb-1 text-lg font-semibold text-surface-50">Tambah Wajah</h2>
 			<p class="mb-4 text-xs text-surface-400">Foto dari sudut berbeda meningkatkan akurasi deteksi</p>
 
-			<label class="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-surface-600 py-6 hover:border-primary-500">
-				<span class="text-3xl">📷</span>
-				<span class="text-sm text-surface-400">Pilih foto wajah</span>
-				<span class="text-xs text-surface-500">Depan, kiri 45°, kanan 45°, atas/bawah</span>
-				<input type="file" accept="image/*" onchange={handleFaceFile} class="hidden" />
-			</label>
-
-			{#if facePreview}
-				<div class="mt-3 overflow-hidden rounded-lg border border-surface-700">
-					<img src={facePreview} alt="Preview" class="h-40 w-full object-cover" />
+			{#if !facePreview}
+				<label class="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-surface-600 py-6 hover:border-primary-500">
+					<i class="ti ti-camera-plus text-surface-500" style="font-size:32px" aria-hidden="true"></i>
+					<span class="text-sm text-surface-400">Pilih foto wajah</span>
+					<span class="text-xs text-surface-500">Depan, kiri 45°, kanan 45°</span>
+					<input type="file" accept="image/*" onchange={handleFaceFile} class="hidden" />
+				</label>
+			{:else}
+				<div class="overflow-hidden rounded-lg border border-surface-700">
+					<img src={facePreview} alt="Preview" class="h-48 w-full object-cover" />
 				</div>
+				<button onclick={() => { faceFile = null; facePreview = null; }} class="mt-2 text-xs text-surface-400 hover:text-surface-200">
+					Ganti foto
+				</button>
 			{/if}
 
 			{#if faceError}
@@ -274,14 +388,11 @@
 			{/if}
 
 			<div class="mt-4 flex gap-2">
-				<button
-					onclick={() => { showFaceModal = false; }}
-					class="flex-1 rounded-md border border-surface-600 px-4 py-2 text-sm text-surface-300 hover:bg-surface-800">
+				<button onclick={() => { showFaceModal = false; }} disabled={savingFace}
+					class="flex-1 rounded-md border border-surface-600 px-4 py-2 text-sm text-surface-300 hover:bg-surface-800 disabled:opacity-50">
 					Batal
 				</button>
-				<button
-					onclick={saveFace}
-					disabled={savingFace || !faceFile}
+				<button onclick={saveFace} disabled={savingFace || !faceFile}
 					class="flex-1 rounded-md bg-primary-500 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-400 disabled:opacity-50">
 					{savingFace ? 'Menyimpan...' : 'Simpan Wajah'}
 				</button>
@@ -290,40 +401,149 @@
 	</div>
 {/if}
 
-<!-- Modal Catat Pesanan -->
+<!-- Modal Catat Pesanan — Menu Grid -->
 {#if showOrderModal}
-	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-		<div class="w-full max-w-sm rounded-xl border border-surface-700 bg-surface-900 p-6 shadow-xl">
-			<h2 class="mb-4 text-lg font-semibold text-surface-50">Catat Pesanan — {customer?.name}</h2>
-
-			{#if lastOrder}
-				<button
-					onclick={() => { orderInput = lastOrder; }}
-					class="mb-4 w-full rounded-lg bg-success-600/20 border border-success-600/40 px-4 py-3 text-left text-sm font-medium text-success-300 hover:bg-success-600/30">
-					✓ Pesan seperti biasanya: {lastOrder}
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+		role="presentation"
+		onclick={() => { if (!savingOrder) showOrderModal = false; }}
+		onkeydown={() => { if (!savingOrder) showOrderModal = false; }}
+	>
+		<div
+			class="flex h-[85vh] w-full max-w-2xl flex-col rounded-xl border border-surface-700 bg-surface-900 shadow-2xl"
+			role="dialog" aria-modal="true" aria-label="Catat pesanan" tabindex="-1"
+			onclick={(e) => e.stopPropagation()}
+			onkeydown={(e) => e.stopPropagation()}
+		>
+			<!-- Header -->
+			<div class="flex items-center justify-between border-b border-surface-700 px-5 py-4">
+				<div class="flex items-center gap-3">
+					<div class="flex size-9 items-center justify-center rounded-full bg-primary-500/20 font-bold text-primary-300">
+						{customer?.name.charAt(0).toUpperCase()}
+					</div>
+					<div>
+						<p class="font-semibold text-surface-50">{customer?.name}</p>
+						<p class="text-xs text-surface-500">Pilih menu pesanan</p>
+					</div>
+				</div>
+				<button onclick={() => { showOrderModal = false; }} class="rounded p-1 text-surface-400 hover:text-surface-200" aria-label="Tutup">
+					<i class="ti ti-x" style="font-size:18px" aria-hidden="true"></i>
 				</button>
+			</div>
+
+			<!-- Saran dari preferensi -->
+			{#if lastOrder}
+				<div class="border-b border-surface-700 px-5 py-3">
+					<p class="text-xs text-surface-500">☕ Biasanya pesan: <span class="text-surface-300">{lastOrder}</span></p>
+				</div>
 			{/if}
 
-			<label for="order-imput" class="mb-1 block text-xs text-surface-400">Atau ketik pesanan:</label>
-			<input
-				type="text"
-				bind:value={orderInput}
-				placeholder="contoh: Kopi Susu, Es Teh..."
-				class="w-full rounded-md border border-surface-600 bg-surface-800 px-3 py-2 text-sm text-surface-100 placeholder-surface-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-			/>
+			<!-- Filter kategori -->
+			{#if categories.length > 0}
+				<div class="flex gap-2 overflow-x-auto border-b border-surface-700 px-5 py-3">
+					<button
+						onclick={() => (selectedCategory = null)}
+						class="shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors
+							{selectedCategory === null ? 'bg-primary-500 text-white' : 'bg-surface-800 text-surface-400 hover:bg-surface-700'}"
+					>
+						Semua
+					</button>
+					{#each categories as cat}
+						<button
+							onclick={() => (selectedCategory = cat)}
+							class="shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors
+								{selectedCategory === cat ? 'bg-primary-500 text-white' : 'bg-surface-800 text-surface-400 hover:bg-surface-700'}"
+						>
+							{cat}
+						</button>
+					{/each}
+				</div>
+			{/if}
 
-			<div class="mt-4 flex gap-2">
-				<button
-					onclick={() => { showOrderModal = false; }}
-					class="flex-1 rounded-md border border-surface-600 px-4 py-2 text-sm text-surface-300 hover:bg-surface-800">
-					Batal
-				</button>
-				<button
-					onclick={saveOrder}
-					disabled={savingOrder || !orderInput.trim()}
-					class="flex-1 rounded-md bg-primary-500 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-400 disabled:opacity-50">
-					{savingOrder ? 'Menyimpan...' : 'Simpan'}
-				</button>
+			<!-- Grid menu -->
+			<div class="flex-1 overflow-y-auto p-5">
+				{#if menuLoading}
+					<div class="flex items-center justify-center gap-2 py-12 text-surface-400">
+						<i class="ti ti-loader-2 animate-spin" aria-hidden="true"></i>
+						<span class="text-sm">Memuat menu...</span>
+					</div>
+				{:else if filteredMenu.length === 0}
+					<div class="flex flex-col items-center justify-center gap-2 py-12 text-center">
+						<i class="ti ti-tools-kitchen-2 text-surface-600" style="font-size:32px" aria-hidden="true"></i>
+						<p class="text-sm text-surface-400">Belum ada menu tersedia</p>
+						<a href="/settings" class="text-xs text-primary-400 hover:underline">Tambah menu di Settings →</a>
+					</div>
+				{:else}
+					<div class="grid grid-cols-3 gap-3">
+						{#each filteredMenu as item (item.id)}
+							{@const qty = cart[item.id] ?? 0}
+							<div class="overflow-hidden rounded-xl border border-surface-700 bg-surface-800 transition-all
+								{qty > 0 ? 'border-primary-500/50 ring-1 ring-primary-500/30' : ''}">
+								<div class="relative h-28 bg-surface-700">
+									{#if item.image_url}
+										<img src={item.image_url} alt={item.name} class="h-full w-full object-cover" />
+									{:else}
+										<div class="flex h-full items-center justify-center">
+											<i class="ti ti-tools-kitchen-2 text-surface-500" style="font-size:28px" aria-hidden="true"></i>
+										</div>
+									{/if}
+									{#if qty > 0}
+										<div class="absolute right-1.5 top-1.5 flex size-5 items-center justify-center rounded-full bg-primary-500 text-xs font-bold text-white">
+											{qty}
+										</div>
+									{/if}
+								</div>
+
+								<div class="p-2.5">
+									<p class="text-xs font-semibold text-surface-100 line-clamp-2 leading-tight">{item.name}</p>
+									<p class="mt-1 text-xs font-bold text-primary-400">{formatPrice(item.price)}</p>
+
+									<div class="mt-2 flex items-center justify-between">
+										{#if qty === 0}
+											<button onclick={() => addToCart(item.id)}
+												class="w-full rounded-lg bg-primary-500 py-1.5 text-xs font-semibold text-white hover:bg-primary-400">
+												+ Tambah
+											</button>
+										{:else}
+											<div class="flex w-full items-center justify-between gap-1">
+												<button onclick={() => removeFromCart(item.id)}
+													class="flex size-7 items-center justify-center rounded-lg bg-surface-700 text-surface-200 hover:bg-surface-600">
+													<i class="ti ti-minus" style="font-size:12px" aria-hidden="true"></i>
+												</button>
+												<span class="text-sm font-bold text-surface-50">{qty}</span>
+												<button onclick={() => addToCart(item.id)}
+													class="flex size-7 items-center justify-center rounded-lg bg-primary-500 text-white hover:bg-primary-400">
+													<i class="ti ti-plus" style="font-size:12px" aria-hidden="true"></i>
+												</button>
+											</div>
+										{/if}
+									</div>
+								</div>
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</div>
+
+			<!-- Footer -->
+			<div class="border-t border-surface-700 px-5 py-4">
+				{#if cartSummary}
+					<p class="mb-3 text-xs text-surface-400 line-clamp-2">
+						<span class="font-medium text-surface-200">Pesanan:</span> {cartSummary}
+					</p>
+					<div class="flex items-center justify-between">
+						<div>
+							<p class="text-xs text-surface-500">Total</p>
+							<p class="text-lg font-bold text-primary-400">{formatPrice(cartTotal)}</p>
+						</div>
+						<button onclick={saveOrder} disabled={savingOrder}
+							class="rounded-lg bg-success-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-success-500 disabled:opacity-50">
+							{savingOrder ? 'Menyimpan...' : 'Simpan Pesanan'}
+						</button>
+					</div>
+				{:else}
+					<p class="text-center text-xs text-surface-500">Pilih menu di atas untuk mencatat pesanan</p>
+				{/if}
 			</div>
 		</div>
 	</div>
