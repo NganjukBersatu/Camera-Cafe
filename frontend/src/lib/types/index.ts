@@ -22,7 +22,7 @@ export interface Customer {
 export interface CustomerFace {
 	id: string;
 	customer_id: string;
-	preview_url: string | null;
+	preview_path: string | null;
 	created_at: string;
 }
 

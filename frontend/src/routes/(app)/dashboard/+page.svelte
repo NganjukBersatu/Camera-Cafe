@@ -318,7 +318,7 @@
 
 			<!-- Saran pesanan biasanya — menonjol -->
 			{#if modalNotif.payload.preferences}
-				<div class="mx-5 mt-4 flex items-center gap-3 rounded-xl border border-success-600/30 bg-gradient-to-r from-success-500/15 to-success-500/5 px-4 py-3">
+				<div class="mx-5 mt-4 flex items-center gap-3 rounded-xl border border-success-600/30 bg-success-500/10 px-4 py-3">
 					<div class="flex size-9 shrink-0 items-center justify-center rounded-full bg-success-500/20">
 						<i class="ti ti-sparkles text-success-400" style="font-size:18px" aria-hidden="true"></i>
 					</div>
@@ -405,6 +405,7 @@
 												<button
 													onclick={() => removeFromCart(item.id)}
 													class="flex size-7 items-center justify-center rounded-lg bg-surface-700 text-surface-200 hover:bg-surface-600"
+													aria-label="Kurangi jumlah {item.name}"
 												>
 													<i class="ti ti-minus" style="font-size:12px" aria-hidden="true"></i>
 												</button>
@@ -412,6 +413,7 @@
 												<button
 													onclick={() => addToCart(item.id)}
 													class="flex size-7 items-center justify-center rounded-lg bg-primary-500 text-white hover:bg-primary-400"
+													aria-label="Tambah jumlah {item.name}"
 												>
 													<i class="ti ti-plus" style="font-size:12px" aria-hidden="true"></i>
 												</button>

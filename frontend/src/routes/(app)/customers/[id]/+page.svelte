@@ -238,9 +238,23 @@
 						<dt class="text-surface-400">Kontak</dt>
 						<dd class="text-surface-100">{customer.contact ?? '—'}</dd>
 					</div>
-					<div class="flex justify-between">
+					<div class="flex flex-col gap-1.5">
 						<dt class="text-surface-400">Preferensi</dt>
-						<dd class="text-surface-100">{customer.preferences ?? '—'}</dd>
+						{#if customer.preferences}
+							<dd class="flex flex-wrap gap-1.5">
+								{#each customer.preferences.split(',').map(p => p.trim()).filter(Boolean) as pref}
+									{@const match = pref.match(/^(.*?)\s*x(\d+)$/i)}
+									<span class="inline-flex items-center gap-1 rounded-md bg-surface-800 px-2 py-1 text-xs text-surface-200">
+										{match ? match[1] : pref}
+										{#if match}
+											<span class="font-medium text-primary-400">x{match[2]}</span>
+										{/if}
+									</span>
+								{/each}
+							</dd>
+						{:else}
+							<dd class="text-surface-500 italic">Belum ada preferensi</dd>
+						{/if}
 					</div>
 					<div class="flex justify-between">
 						<dt class="text-surface-400">Catatan</dt>
@@ -262,36 +276,37 @@
 						<p class="text-sm text-surface-500">Belum ada data wajah tersimpan.</p>
 					</div>
 				{:else}
-					<div class="grid grid-cols-3 gap-2">
+					<div class="flex max-h-40 flex-col divide-y divide-surface-800 overflow-y-auto pr-1">
 						{#each faces as face, i (face.id)}
-							<div class="group relative overflow-hidden rounded-lg border border-surface-700 bg-surface-800">
-								<div class="flex h-24 flex-col items-center justify-center gap-1">
-									<i class="ti ti-face-id text-surface-500" style="font-size:24px" aria-hidden="true"></i>
-									<p class="text-xs text-surface-500">Wajah #{i + 1}</p>
-									<p class="text-xs text-surface-600">{new Date(face.created_at).toLocaleDateString('id-ID')}</p>
+							<div class="group relative flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+								<!-- Avatar bulat, bukan kotak -->
+								<div class="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-surface-700 bg-surface-800">
+									<i class="ti ti-face-id text-surface-500" style="font-size:18px" aria-hidden="true"></i>
+								</div>
+
+								<div class="min-w-0 flex-1">
+									<p class="text-sm font-medium text-surface-100">Wajah #{i + 1}</p>
+									<p class="text-xs text-surface-500">{new Date(face.created_at).toLocaleDateString('id-ID')}</p>
 								</div>
 
 								{#if confirmDeleteFaceId === face.id}
-									<div class="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-black/80 p-2">
-										<p class="text-center text-xs font-semibold text-white">Hapus wajah ini?</p>
-										<div class="flex gap-1.5">
-											<button onclick={() => (confirmDeleteFaceId = null)} class="rounded px-2 py-1 text-xs text-surface-300 hover:bg-surface-700">Batal</button>
-											<button
-												onclick={() => deleteFace(face.id)}
-												disabled={deletingFaceId === face.id}
-												class="rounded bg-error-700 px-2 py-1 text-xs text-white hover:bg-error-600 disabled:opacity-50"
-											>
-												{deletingFaceId === face.id ? '...' : 'Hapus'}
-											</button>
-										</div>
+									<div class="flex items-center gap-1.5">
+										<button onclick={() => (confirmDeleteFaceId = null)} class="rounded px-2 py-1 text-xs text-surface-300 hover:bg-surface-700">Batal</button>
+										<button
+											onclick={() => deleteFace(face.id)}
+											disabled={deletingFaceId === face.id}
+											class="rounded bg-error-700 px-2 py-1 text-xs text-white hover:bg-error-600 disabled:opacity-50"
+										>
+											{deletingFaceId === face.id ? '...' : 'Hapus'}
+										</button>
 									</div>
 								{:else}
 									<button
 										onclick={() => (confirmDeleteFaceId = face.id)}
-										class="absolute right-1 top-1 hidden rounded bg-black/60 p-1 text-error-400 hover:text-error-300 group-hover:flex"
-										aria-label="Hapus foto"
+										class="rounded p-1.5 text-surface-500 opacity-0 hover:text-error-400 group-hover:opacity-100"
+										aria-label="Hapus foto wajah #{i + 1}"
 									>
-										<i class="ti ti-trash" style="font-size:13px" aria-hidden="true"></i>
+										<i class="ti ti-trash" style="font-size:15px" aria-hidden="true"></i>
 									</button>
 								{/if}
 							</div>
@@ -321,7 +336,21 @@
 							{#each visits as visit (visit.id)}
 								<tr>
 									<td class="px-4 py-2 text-surface-200">{new Date(visit.visited_at).toLocaleString('id-ID')}</td>
-									<td class="px-4 py-2 text-surface-100">{visit.order_note ?? '—'}</td>
+									<td class="px-4 py-3 align-top">
+										{#if visit.order_note}
+											<div class="flex flex-wrap gap-1.5">
+												{#each visit.order_note.split(',').map(s => s.trim()).filter(Boolean) as item}
+													{@const match = item.match(/^(.*?)\s*x(\d+)$/i)}
+													<span class="inline-flex items-center gap-1 rounded-md bg-surface-800 px-2 py-1 text-xs text-surface-200">
+														{match ? match[1] : item}
+														{#if match}<span class="font-medium text-primary-400">×{match[2]}</span>{/if}
+													</span>
+												{/each}
+											</div>
+										{:else}
+											<span class="text-surface-500">—</span>
+										{/if}
+									</td>
 									<td class="px-4 py-2 text-surface-400">
 										{#if visit.source === 'auto_recognition'}
 											<div class="flex items-center gap-2">
@@ -433,8 +462,14 @@
 
 			<!-- Saran dari preferensi -->
 			{#if lastOrder}
-				<div class="border-b border-surface-700 px-5 py-3">
-					<p class="text-xs text-surface-500">☕ Biasanya pesan: <span class="text-surface-300">{lastOrder}</span></p>
+				<div class="mx-5 mt-4 flex items-center gap-3 rounded-xl border border-success-600/30 bg-success-500/10 px-4 py-3">
+					<div class="flex size-9 shrink-0 items-center justify-center rounded-full bg-success-500/20">
+						<i class="ti ti-sparkles text-success-400" style="font-size:18px" aria-hidden="true"></i>
+					</div>
+					<div class="min-w-0 flex-1">
+						<p class="text-[11px] font-medium uppercase tracking-wide text-success-500/80">Biasanya pesan</p>
+						<p class="truncate text-sm font-semibold text-success-200">{lastOrder}</p>
+					</div>
 				</div>
 			{/if}
 
@@ -507,12 +542,14 @@
 										{:else}
 											<div class="flex w-full items-center justify-between gap-1">
 												<button onclick={() => removeFromCart(item.id)}
-													class="flex size-7 items-center justify-center rounded-lg bg-surface-700 text-surface-200 hover:bg-surface-600">
+													class="flex size-7 items-center justify-center rounded-lg bg-surface-700 text-surface-200 hover:bg-surface-600"
+													aria-label="Kurangi jumlah {item.name}">
 													<i class="ti ti-minus" style="font-size:12px" aria-hidden="true"></i>
 												</button>
 												<span class="text-sm font-bold text-surface-50">{qty}</span>
 												<button onclick={() => addToCart(item.id)}
-													class="flex size-7 items-center justify-center rounded-lg bg-primary-500 text-white hover:bg-primary-400">
+													class="flex size-7 items-center justify-center rounded-lg bg-primary-500 text-white hover:bg-primary-400"
+													aria-label="Tambah jumlah {item.name}">
 													<i class="ti ti-plus" style="font-size:12px" aria-hidden="true"></i>
 												</button>
 											</div>
